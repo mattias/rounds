@@ -31,6 +31,9 @@ A small browser extension (Chrome, Vivaldi, Edge) that turns a **YouTube** or **
 
 Shortcuts: Alt+1–4 round · Alt+←/→ block · Alt+R replay · Alt+M mark clip.
 
+### Mobile web app (YouTube only)
+For phones and tablets there is a small installable web app in [`docs/`](docs), published with GitHub Pages: **https://mattias.github.io/rounds/**. Open it, add it to your home screen, paste or share a YouTube link, add the blocks (paste Gemini's list straight in) and run the same four rounds, clips with the speed ramp, loop, the Gemini prompt, all languages and the 8 interface languages. **Export / Import** (in the app and in the extension's popup, same file format) moves your blocks, clips and settings between devices. Netflix is not possible on mobile, and the cover bars are left out because YouTube's rules do not allow drawing anything over an embedded player. The embedded player plays in 0.05 steps, so a ramp step of 0.93x plays as 0.90x. After changing shared code, run `node tools/sync-web.js`.
+
 Blocks, clips and settings are stored locally in your browser. The extension only reads the subtitle files the Netflix player has already downloaded and sends nothing anywhere except what you paste into Gemini yourself. The interface is available in English, 日本語, Svenska, Español, Français, Deutsch, 한국어 and 中文.
 
 Netflix support is built from public knowledge of the web player and was not tested against every title or region. The technique (listening to the player's subtitle downloads, seeking through the player API) is the one used by [Ukai](https://github.com/SonicSandbox/ukai); no code was copied.
@@ -61,6 +64,9 @@ YouTubeまたはNetflixの動画を**ブロック**に分け、ブロックご�
 6. **隠しバー：** 上と下の黒いバーをそれぞれ％で設定でき（初期値は下24%、上はオフ）、ラウンド1と4で焼き込み字幕を隠します。Netflixでは自身の字幕も非表示になります。
 
 ショートカット：Alt+1–4 ラウンド · Alt+←/→ ブロック · Alt+R もう一度 · Alt+M クリップ。
+
+### モバイル用Webアプリ（YouTubeのみ）
+スマホ・タブレット向けに、[`docs/`](docs)にインストール可能な小さなWebアプリがあり、GitHub Pagesで公開されています：**https://mattias.github.io/rounds/**。開いてホーム画面に追加し、YouTubeのリンクを貼り付け（または共有）、ブロックを追加（Geminiの一覧をそのまま貼り付け可）すれば、同じ4つのラウンド、速度ランプ付きクリップ、ループ、Gemini用プロンプト、全言語、8つの表示言語が使えます。**エクスポート／インポート**（アプリと拡張機能のポップアップの両方、同じファイル形式）で、ブロック・クリップ・設定を端末間で移せます。Netflixはモバイルでは対応できず、隠しバーはYouTubeの規約上、埋め込みプレーヤーの上に何も重ねられないため含まれていません。埋め込みプレーヤーは0.05刻みで再生するため、0.93倍は0.90倍で再生されます。
 
 ブロック・クリップ・設定はブラウザ内にのみ保存されます。拡張機能はNetflixのプレーヤーがすでにダウンロードした字幕ファイルを読むだけで、ご自身でGeminiに貼り付けるもの以外は何も送信しません。表示言語は English / 日本語 / Svenska / Español / Français / Deutsch / 한국어 / 中文 に対応しています。
 

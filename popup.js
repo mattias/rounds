@@ -135,6 +135,51 @@
       el("label", { className: "row" }, tabBox, T("showTab")),
       el("div", { className: "hint", textContent: T("keys") }),
     );
+
+    // Backup: same file format as the mobile web app.
+    const note = el("span", { className: "ok", textContent: flash });
+    flash = "";
+    const file = el("input", { type: "file", accept: "application/json,.json", style: "display:none" });
+    file.onchange = async () => { if (file.files[0]) { flash = await importData(file.files[0]); render(); } };
+    app.append(
+      el("h2", { textContent: T("sBackup") }),
+      el("div", { className: "hint", textContent: T("backupHint") }),
+      el("div", { className: "row" },
+        el("button", { textContent: "⬇ " + T("exportB"), onclick: async () => { await exportData(); note.textContent = T("exported"); } }),
+        // A file picker closes the toolbar popup, so importing happens on the full settings page.
+        el("button", { textContent: "⬆ " + T("importB"), onclick: () => (isTab ? file.click() : chrome.runtime.openOptionsPage()) }),
+        file, note),
+    );
+  }
+
+  async function exportData() {
+    const all = await chrome.storage.local.get(null);
+    const videos = {};
+    for (const [k, v] of Object.entries(all)) {
+      if (/^(youtube|netflix):/.test(k)) videos[k] = { text: v.text || "", clips: v.clips || {} };
+      else if (k.startsWith("vid:") && !videos["youtube:" + k.slice(4)]) videos["youtube:" + k.slice(4)] = { text: v.text || "", clips: v.clips || {} };
+    }
+    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos }, null, 1)], { type: "application/json" });
+    const a = el("a", { href: URL.createObjectURL(blob), download: "rounds-backup.json" });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  // Keys are "youtube:ID" / "netflix:ID"; plain IDs (from the mobile app) mean YouTube.
+  async function importData(f) {
+    try {
+      const d = JSON.parse(await f.text());
+      if (d.app !== "rounds" || typeof d.videos !== "object") throw new Error("bad");
+      const existing = await chrome.storage.local.get(null);
+      const patch = {};
+      for (const [k, rec] of Object.entries(d.videos)) {
+        const key = /^(youtube|netflix):/.test(k) ? k : "youtube:" + k;
+        const old = existing[key] || {};
+        patch[key] = { on: old.on ?? !!rec.text, text: rec.text || "", clips: rec.clips || {} };
+      }
+      if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); patch.cfg = cfg; T = makeT(cfg.uiLang); }
+      await chrome.storage.local.set(patch);
+      return T("imported", Object.keys(d.videos).length);
+    } catch { return T("importBad"); }
   }
 
   (async () => {
