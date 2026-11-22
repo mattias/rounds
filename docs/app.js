@@ -1,6 +1,6 @@
 // Rounds for mobile: the same rounds as the browser extension, on top of the YouTube IFrame player.
 (() => {
-  const { LANGS, UI_LANGS, mergeCfg, makeT } = YR;
+  const { LANGS, UI_LANGS, mergeCfg, makeT, codeOf } = YR;
   const { parseBlocks, PROMPTS, TAILS } = Core;
 
   // App-only strings (English / 日本語 / Svenska; other interface languages fall back to English).
@@ -15,6 +15,19 @@
       exportB: "Export", importB: "Import", exportHint: "Save your blocks, clips and settings as a file, or load a file from another device.",
       imported: "Imported {0} video(s).", importBad: "Not a Rounds backup file.", exported: "Backup saved.",
       noEmbed: "This video cannot be played here (embedding is disabled).", rate: "Playing at {0}x on this device.",
+      barsLocalOnly: "Used for local files only (YouTube does not allow covering its player). Shown in rounds 1 and 4.",
+      localT: "Local",
+      pickFiles: "Choose video + subtitles",
+      dropHint: "On a computer you can also drop the files here.",
+      localHint: "Your own video or audio file, with .srt, .vtt or .ass subtitles. Plays in your browser: mp4 (H.264/AAC) works everywhere, mkv mostly in Chrome on a computer. Nothing is uploaded.",
+      localErr: "The browser cannot play this file (format or codec). Converting it to mp4 (H.264/AAC) usually helps.",
+      subsT: "Subtitles",
+      subsNone: "No subtitles yet. Add an .srt, .vtt or .ass file.",
+      subsAdd: "Add subtitles / change files",
+      encT: "Encoding",
+      reopen: "Choose the same file again to continue ({0}).",
+      noVideoYet: "Choose a video (or audio) file first.",
+      localSubs: "{0} · {1} lines",
       playerT: "Player", histT: "History", histEmpty: "Videos you open show up here (the last 10).", histClear: "Clear history", histRemove: "Remove", histBlocks: "{0} blocks",
     },
     ja: {
@@ -27,6 +40,19 @@
       exportB: "エクスポート", importB: "インポート", exportHint: "ブロック・クリップ・設定をファイルに保存、または別の端末のファイルを読み込みます。",
       imported: "{0}件の動画を読み込みました。", importBad: "Roundsのバックアップファイルではありません。", exported: "バックアップを保存しました。",
       noEmbed: "この動画はここでは再生できません（埋め込みが無効）。", rate: "この端末では{0}倍速で再生されています。",
+      barsLocalOnly: "ローカルファイルのみで使用します（YouTubeはプレーヤーを覆うことを許可していません）。ラウンド1と4で表示されます。",
+      localT: "ローカル",
+      pickFiles: "動画と字幕を選ぶ",
+      dropHint: "パソコンではファイルをここにドロップすることもできます。",
+      localHint: "お持ちの動画・音声ファイルと、.srt / .vtt / .ass の字幕を使えます。ブラウザ内で再生されます。mp4（H.264/AAC）はどこでも、mkvは主にパソコンのChromeで再生できます。何もアップロードされません。",
+      localErr: "このファイルはブラウザで再生できません（形式またはコーデック）。mp4（H.264/AAC）に変換すると解決することが多いです。",
+      subsT: "字幕",
+      subsNone: "字幕がありません。.srt / .vtt / .ass ファイルを追加してください。",
+      subsAdd: "字幕を追加／ファイルを変更",
+      encT: "文字コード",
+      reopen: "続けるには同じファイルをもう一度選んでください（{0}）。",
+      noVideoYet: "まず動画（または音声）ファイルを選んでください。",
+      localSubs: "{0} · {1}行",
       playerT: "プレーヤー", histT: "履歴", histEmpty: "開いた動画がここに表示されます（最新10件）。", histClear: "履歴を消去", histRemove: "削除", histBlocks: "{0}ブロック",
     },
     sv: {
@@ -39,6 +65,19 @@
       exportB: "Exportera", importB: "Importera", exportHint: "Spara dina block, klipp och inställningar som en fil, eller läs in en fil från en annan enhet.",
       imported: "Importerade {0} video(r).", importBad: "Inte en Rounds-säkerhetskopia.", exported: "Säkerhetskopian sparad.",
       noEmbed: "Videon kan inte spelas här (inbäddning är avstängd).", rate: "Spelas i {0}x på den här enheten.",
+      barsLocalOnly: "Används bara för lokala filer (YouTube tillåter inte att man täcker spelaren). Visas i runda 1 och 4.",
+      localT: "Lokal",
+      pickFiles: "Välj video + undertexter",
+      dropHint: "På dator kan du också släppa filerna här.",
+      localHint: "Din egen video- eller ljudfil, med undertexter i .srt, .vtt eller .ass. Spelas i webbläsaren: mp4 (H.264/AAC) fungerar överallt, mkv mest i Chrome på dator. Inget laddas upp.",
+      localErr: "Webbläsaren kan inte spela den här filen (format eller codec). Att konvertera till mp4 (H.264/AAC) hjälper oftast.",
+      subsT: "Undertexter",
+      subsNone: "Inga undertexter än. Lägg till en .srt-, .vtt- eller .ass-fil.",
+      subsAdd: "Lägg till undertexter / byt filer",
+      encT: "Teckenkodning",
+      reopen: "Välj samma fil igen för att fortsätta ({0}).",
+      noVideoYet: "Välj först en video- (eller ljud-)fil.",
+      localSubs: "{0} · {1} rader",
       playerT: "Spelare", histT: "Historik", histEmpty: "Videor du öppnar visas här (de senaste 10).", histClear: "Rensa historiken", histRemove: "Ta bort", histBlocks: "{0} block",
     },
   };
@@ -74,11 +113,29 @@
   }
 
   // ---------- State ----------
-  const S = {
-    vid: null, text: "", blocks: [], clips: {}, cur: -1, round: 1, active: false, pass: 0, clip: 0,
+  // One state per source: a YouTube video and a local file can both be "open" while you switch tabs.
+  const newState = (mode) => ({
+    mode, vid: null, text: "", blocks: [], clips: {}, cur: -1, round: 1, active: false, pass: 0, clip: 0,
     markStart: null, msg: null, lock: 0, ready: false, dur: 0, rateSeen: null, noEmbed: false,
+    local: null, // local files: { name, url, tracks: [{ name, buf, enc, cues }], sel, err }
+  });
+  const states = { youtube: newState("youtube"), local: newState("local") };
+  let S = states.youtube;
+  window.__rounds = { states, get S() { return S; }, get yt() { return yt; } }; // handy for debugging in the console
+  const ROUND_COVER = { 1: true, 2: false, 3: false, 4: true }; // rounds that hide text / cover hard-coded subtitles
+
+  // The rounds only need these few operations, so YouTube's player and a plain <video> are interchangeable.
+  const lv = () => $("#lv");
+  const E = {
+    seek: (t) => (S.mode === "local" ? (lv().currentTime = t) : yt.seekTo(t, true)),
+    play: () => (S.mode === "local" ? lv().play().catch(() => {}) : yt.playVideo()),
+    pause: () => (S.mode === "local" ? lv().pause() : yt && yt.pauseVideo()),
+    setRate: (r) => (S.mode === "local" ? (lv().playbackRate = r) : yt.setPlaybackRate(r)),
+    rate: () => (S.mode === "local" ? lv().playbackRate : yt.getPlaybackRate()),
+    time: () => (S.mode === "local" ? lv().currentTime : yt.getCurrentTime()),
+    playing: () => (S.mode === "local" ? !lv().paused && !lv().ended : !!yt && yt.getPlayerState && yt.getPlayerState() === 1),
+    ok: () => S.ready && (S.mode === "local" || !!yt),
   };
-  window.__rounds = { S, get yt() { return yt; } }; // handy for debugging in the console
   const open = new Set(JSON.parse(LS.getItem("rounds:open") || "[]"));
 
   // ---------- Player ----------
@@ -94,17 +151,19 @@
       videoId: id,
       playerVars: { playsinline: 1, rel: 0, modestbranding: 1, enablejsapi: 1, origin: location.origin },
       events: {
-        onReady: () => { S.ready = true; updateDur(); noteTitle(); render(); },
+        onReady: () => { states.youtube.ready = true; updateDur(); noteTitle(); render(); },
         onStateChange: (e) => { if (e.data === 1 || e.data === 5) { updateDur(); noteTitle(); } },
-        onError: () => { S.noEmbed = true; render(); },
+        onError: () => { states.youtube.noEmbed = true; render(); },
       },
     });
   }
   function updateDur() {
+    const Y = states.youtube;
     const d = yt && yt.getDuration && yt.getDuration();
-    if (d > 0 && d !== S.dur) {
-      S.dur = d; self.__dur = d;
-      if (S.text) S.blocks = parseBlocks(S.text);
+    if (d > 0 && d !== Y.dur) {
+      Y.dur = d;
+      if (S === Y) self.__dur = d;
+      if (Y.text) Y.blocks = parseBlocks(Y.text);
       render();
     }
   }
@@ -112,20 +171,24 @@
   const HIST_KEY = "rounds:history", HIST_MAX = 10;
   let view = "player"; // "player" | "history"
   const getHist = () => (Array.isArray(getJ(HIST_KEY)) ? getJ(HIST_KEY) : []);
-  function touchHist(id) {
+  function touchHist(id, extra = {}) {
     const all = getHist(), old = all.find((e) => e.id === id);
-    setJ(HIST_KEY, [{ id, title: old?.title || "", ts: Date.now() }, ...all.filter((e) => e.id !== id)].slice(0, HIST_MAX));
+    setJ(HIST_KEY, [{ id, title: old?.title || "", ...extra, ts: Date.now() }, ...all.filter((e) => e.id !== id)].slice(0, HIST_MAX));
   }
   function noteTitle() {
     const vd = yt && yt.getVideoData && yt.getVideoData();
-    if (!vd || !vd.title || vd.video_id !== S.vid) return;
-    const all = getHist(), e = all.find((x) => x.id === S.vid);
+    const id = states.youtube.vid;
+    if (!vd || !vd.title || vd.video_id !== id) return;
+    const all = getHist(), e = all.find((x) => x.id === id);
     if (e && e.title !== vd.title) { e.title = vd.title; setJ(HIST_KEY, all); }
   }
+  // Tabs: "player" (YouTube), "local" (own files), "history". Leaving a tab pauses what was playing.
   function setView(v) {
     if (v === view) return;
-    if (v === "history" && yt && isPlaying()) { yt.pauseVideo(); S.active = false; }
+    if (E.ok() && E.playing()) { E.pause(); S.active = false; }
     view = v;
+    if (v === "player") S = states.youtube;
+    if (v === "local") S = states.local;
     render();
   }
   function historyView() {
@@ -135,8 +198,9 @@
       const rec = getJ(VID_PREFIX + e.id);
       const n = rec && rec.text ? parseBlocks(rec.text).length : 0;
       wrap.append(el("div", { className: "hist" },
-        el("button", { className: "histbtn", onclick: () => loadVideo(e.id) },
-          el("img", { src: `https://i.ytimg.com/vi/${e.id}/mqdefault.jpg`, alt: "", loading: "lazy" }),
+        el("button", { className: "histbtn", onclick: () => (e.kind === "local" ? reopenLocal(e) : loadVideo(e.id)) },
+          e.kind === "local" ? el("span", { className: "thumb-local", textContent: "🎞" })
+            : el("img", { src: `https://i.ytimg.com/vi/${e.id}/mqdefault.jpg`, alt: "", loading: "lazy" }),
           el("span", { className: "histtxt" }, el("b", { textContent: e.title || e.id }),
             el("small", { textContent: `${new Date(e.ts).toLocaleDateString(cfg.uiLang)} · ${A("histBlocks", n)}` }))),
         el("button", { textContent: "✕", title: A("histRemove"), onclick: () => { setJ(HIST_KEY, getHist().filter((x) => x.id !== e.id)); render(); } })));
@@ -147,7 +211,9 @@
 
   function loadVideo(id) {
     touchHist(id);
+    S = states.youtube;
     if (id === S.vid && yt && S.ready) { view = "player"; render(); return; }
+    if (lv() && !lv().paused) lv().pause();
     view = "player";
     S.vid = id; S.cur = -1; S.active = false; S.msg = null; S.noEmbed = false; S.ready = false; S.dur = 0; self.__dur = 0;
     const rec = getJ(VID_PREFIX + id);
@@ -160,7 +226,95 @@
     }
     render();
   }
-  const isPlaying = () => yt && yt.getPlayerState && yt.getPlayerState() === 1;
+
+  // ---------- Local files (own video/audio + .srt/.vtt/.ass) ----------
+  const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|ogv|ogg|mp3|m4a|aac|wav|flac|opus)$/i;
+  const SUB_EXT = /\.(srt|vtt|ass|ssa)$/i;
+  const langCode = () => codeOf(cfg.langs.target);
+  const subsText = (cues) => cues.map((c) => `[${fmtH(c.s)}] ${c.text.replace(/\n/g, " ")}`).join("\n");
+  function fmtH(s) { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`; }
+  function cuesAt(cues, t) { // cues are sorted by start; overlapping ones are shown together
+    let lo = 0, hi = cues.length - 1, idx = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (cues[m].s <= t) { idx = m; lo = m + 1; } else hi = m - 1; }
+    const out = [];
+    for (let i = idx; i >= 0 && i > idx - 10; i--) if (cues[i].e > t) out.unshift(cues[i].text);
+    return out;
+  }
+  function addSubFile(name, buf) {
+    const L = states.local.local;
+    if (!L) return;
+    const tr = { name, buf, enc: "auto", cues: [] };
+    reparse(tr);
+    L.tracks.push(tr);
+    L.sel = L.tracks.length - 1;
+  }
+  function reparse(tr) {
+    const d = Subs.decode(tr.buf, tr.enc, langCode());
+    tr.used = d.enc;
+    tr.cues = Subs.parse(d.text, tr.name);
+  }
+  function loadLocalVideo(file) {
+    S = states.local;
+    if (S.local && S.local.url) URL.revokeObjectURL(S.local.url);
+    if (!lv().paused) lv().pause();
+    const key = `local:${file.name}|${file.size}`;
+    S.vid = key; S.cur = -1; S.active = false; S.msg = null; S.ready = false; S.dur = 0; self.__dur = 0;
+    S.local = { name: file.name, url: URL.createObjectURL(file), tracks: [], sel: -1, err: false };
+    const rec = getJ(VID_PREFIX + key);
+    S.text = rec?.text || ""; S.clips = rec?.clips || {}; S.blocks = [];
+    touchHist(key, { kind: "local", title: file.name });
+    lv().src = S.local.url;
+    lv().load();
+    view = "local";
+    history.replaceState(null, "", location.pathname);
+    render();
+  }
+  async function handleFiles(list) {
+    const files = [...list];
+    const video = files.find((f) => VIDEO_EXT.test(f.name) || /^(video|audio)\//.test(f.type));
+    const subs = files.filter((f) => SUB_EXT.test(f.name));
+    if (video) loadLocalVideo(video);
+    if (!states.local.local) { states.local.msg = A("noVideoYet"); view = "local"; S = states.local; render(); return; }
+    for (const f of subs) addSubFile(f.name, await f.arrayBuffer());
+    view = "local"; S = states.local;
+    render();
+  }
+  function reopenLocal(e) { // browsers cannot reopen a file by themselves: ask for it again
+    view = "local"; S = states.local;
+    states.local.msg = A("reopen", e.title || e.id);
+    render();
+    $("#lfile").click();
+  }
+  function wireLocalVideo() {
+    const v = lv();
+    v.addEventListener("loadedmetadata", () => {
+      const L = states.local;
+      L.ready = true; L.dur = v.duration; if (S === L) self.__dur = v.duration;
+      L.blocks = parseBlocks(L.text);
+      render();
+    });
+    v.addEventListener("error", () => { if (states.local.local) { states.local.local.err = true; states.local.ready = false; render(); } });
+    v.addEventListener("ratechange", () => { if (S === states.local) S.rateSeen = v.playbackRate; });
+    // Subtitle overlay: our own text, hidden in the "blind" rounds.
+    let last = null;
+    setInterval(() => {
+      const L = states.local, box = $("#lsub");
+      if (!box) return;
+      const tr = L.local && L.local.tracks[L.local.sel];
+      const hide = L.active && ROUND_COVER[L.round];
+      const txt = !tr || hide ? "" : cuesAt(tr.cues, v.currentTime).join("\n");
+      if (txt !== last) { last = txt; box.textContent = txt; box.style.display = txt ? "block" : "none"; }
+    }, 100);
+  }
+  function applyLocalView() {
+    const L = states.local, cover = view === "local" && L.active && ROUND_COVER[L.round];
+    for (const pos of ["top", "bottom"]) {
+      const b = $("#lbar-" + pos);
+      if (!b) continue;
+      b.style.display = cover && cfg.bars[pos] > 0 ? "block" : "none";
+      b.style.height = cfg.bars[pos] + "%";
+    }
+  }
 
   // ---------- Playback ----------
   function segment() {
@@ -173,14 +327,14 @@
     return b;
   }
   function rateFor() {
-    // the embedded player works in 0.05 steps
-    const q = (x) => Math.round(x * 20) / 20;
+    // YouTube's embedded player works in 0.05 steps; a local file takes any rate
+    const q = S.mode === "local" ? (x) => Math.round(x * 100) / 100 : (x) => Math.round(x * 20) / 20;
     if (S.round !== 3) return q(cfg.speed[S.round]);
     const { from, to, passes } = cfg.r3;
     return q(passes <= 1 ? to : from + ((to - from) * S.pass) / (passes - 1));
   }
   function start(i, round) {
-    if (!S.ready || !S.blocks[i]) return;
+    if (!E.ok() || !S.blocks[i]) return;
     if (round) S.round = round;
     S.cur = i; S.pass = 0; S.clip = 0; S.active = true; S.msg = null;
     seekPlay();
@@ -188,15 +342,16 @@
   }
   function seekPlay() {
     const seg = segment();
-    if (!seg || !yt) return;
+    if (!seg || !E.ok()) return;
     S.lock = Date.now() + 600;
-    yt.seekTo(seg.s, true);
-    yt.setPlaybackRate(rateFor());
-    yt.playVideo();
-    setTimeout(() => { S.rateSeen = yt.getPlaybackRate(); render(); }, 500);
+    E.seek(seg.s);
+    E.setRate(rateFor());
+    E.play();
+    const mine = S;
+    setTimeout(() => { if (S === mine && E.ok()) { S.rateSeen = E.rate(); render(); } }, 500);
   }
   function halt() {
-    yt && yt.pauseVideo();
+    E.ok() && E.pause();
     S.active = false;
     render();
   }
@@ -216,21 +371,21 @@
     render();
   }
   setInterval(() => {
-    if (!S.active || !yt || !S.ready) return;
+    if (!S.active || !E.ok() || (S.mode === "youtube" && view !== "player") || (S.mode === "local" && view !== "local")) return;
     const seg = segment();
     if (!seg) return;
-    const t = yt.getCurrentTime();
+    const t = E.time();
     const bar = $(".blk.on .prog");
     if (bar) bar.style.width = Math.min(100, Math.max(0, ((t - seg.s) / (seg.e - seg.s)) * 100)) + "%";
     if (Date.now() < S.lock) return;
-    if (isPlaying() && t >= seg.e - 0.05) onEnd();
+    if (E.playing() && t >= seg.e - 0.05) onEnd();
   }, 80);
 
 
   // ---------- Clips ----------
   function markClip() {
-    if (!S.ready || S.cur < 0) { S.msg = T("pick"); return render(); }
-    const t = yt.getCurrentTime();
+    if (!E.ok() || S.cur < 0) { S.msg = T("pick"); return render(); }
+    const t = E.time();
     if (S.markStart == null) { S.markStart = t; S.msg = T("clipStart", fmt(t)); }
     else {
       const s = Math.min(S.markStart, t), e = Math.max(S.markStart, t);
@@ -244,7 +399,12 @@
   async function copyPrompt(thenOpen) {
     const pl = cfg.promptIn === "ja" ? "ja" : "en";
     const { target, native } = cfg.langs;
-    const tail = `${TAILS[pl].link}\nhttps://www.youtube.com/watch?v=${S.vid}`;
+    let tail;
+    if (S.mode === "local") { // a local file has no link: send the whole subtitle text instead
+      const tr = S.local && S.local.tracks[S.local.sel];
+      if (!tr || !tr.cues.length) { S.msg = T("needSubs"); return render(); }
+      tail = `${TAILS[pl].subs} (${S.local.name}; ${target}; "[h:mm:ss] line"):\n\n${subsText(tr.cues)}`;
+    } else tail = `${TAILS[pl].link}\nhttps://www.youtube.com/watch?v=${S.vid}`;
     const text = PROMPTS[pl]({ target, native, tail });
     try { await navigator.clipboard.writeText(text); }
     catch {
@@ -348,21 +508,32 @@
       return;
     }
 
-    // Tabs: player / history
+    // Tabs: YouTube player / local files / history
     const tabs = $("#tabs");
     tabs.replaceChildren(
       el("button", { className: view === "player" ? "on" : "", textContent: "▶ " + A("playerT"), onclick: () => setView("player") }),
+      el("button", { className: view === "local" ? "on" : "", textContent: "🎞 " + A("localT"), onclick: () => setView("local") }),
       el("button", { className: view === "history" ? "on" : "", textContent: "🕘 " + A("histT"), onclick: () => setView("history") }));
     tabs.style.display = "flex";
+    $("#form").style.display = view === "local" ? "none" : "flex";
+    $("#player-wrap").style.display = view === "player" && states.youtube.vid ? "block" : "none";
+    $("#local-wrap").style.display = view === "local" && states.local.vid ? "block" : "none";
+    applyLocalView();
     if (view === "history") {
-      $("#player-wrap").style.display = "none";
       root.append(historyView());
       return;
     }
 
-    $("#player-wrap").style.display = S.vid ? "block" : "none";
-    if (!S.vid) root.append(el("p", { className: "hint", textContent: A("intro") }));
+    if (view === "player" && !S.vid) root.append(el("p", { className: "hint", textContent: A("intro") }));
+    if (view === "local" && !S.vid) {
+      root.append(el("div", { className: "card" },
+        el("p", { className: "hint", textContent: A("localHint") }),
+        el("button", { className: "primary", textContent: "📂 " + A("pickFiles"), onclick: () => $("#lfile").click() }),
+        el("p", { className: "hint", textContent: A("dropHint") }),
+        S.msg ? el("p", { className: "warn", textContent: S.msg }) : ""));
+    }
     if (S.noEmbed) root.append(el("p", { className: "warn", textContent: A("noEmbed") }));
+    if (S.mode === "local" && S.local && S.local.err) root.append(el("p", { className: "warn", textContent: A("localErr") }));
 
     if (S.vid) {
       // Rounds
@@ -419,6 +590,22 @@
         el("button", { className: "primary", textContent: "📋 " + T("copyPrompt"), onclick: () => copyPrompt(false) }),
         el("button", { textContent: "✦ " + A("gemini"), onclick: () => copyPrompt(true) })));
 
+      // Local files: which subtitle track, which text encoding, add more files
+      if (S.mode === "local" && S.local) {
+        const L = S.local, tr = L.tracks[L.sel];
+        const box = el("div", { className: "list" }, el("h3", { textContent: A("subsT") }));
+        if (!L.tracks.length) box.append(el("p", { className: "hint", textContent: A("subsNone") }));
+        else {
+          const sel = el("select", { className: "grow", onchange: () => { L.sel = Number(sel.value); render(); } });
+          L.tracks.forEach((t, i) => sel.append(el("option", { value: i, selected: i === L.sel, textContent: A("localSubs", t.name, t.cues.length) })));
+          const enc = el("select", { title: A("encT"), onchange: () => { tr.enc = enc.value; reparse(tr); render(); } });
+          ["auto", ...Subs.ENCODINGS].forEach((e) => enc.append(el("option", { value: e, selected: e === tr.enc, textContent: e === "auto" ? `${A("encT")}: auto (${tr.used})` : e })));
+          box.append(el("div", { className: "row" }, sel), el("div", { className: "row" }, enc));
+        }
+        box.append(el("button", { textContent: "📂 " + A("subsAdd"), onclick: () => $("#lfile").click() }));
+        root.append(box);
+      }
+
       // Block editor
       const ta = el("textarea", { value: S.text, spellcheck: false });
       const saved = el("span", { className: "ok" });
@@ -454,7 +641,10 @@
       row(T("r3cfg"), T("from"), num(cfg.r3.from, 0.25, 2, 0.05, (v) => (cfg.r3.from = v || 1)), T("to"), num(cfg.r3.to, 0.25, 2, 0.05, (v) => (cfg.r3.to = v || 1)),
         T("passes"), num(cfg.r3.passes, 1, 10, 1, (v) => (cfg.r3.passes = Math.max(1, v | 0)))),
       row(T("r4"), num(cfg.speed[4], 0.25, 2, 0.05, (v) => (cfg.speed[4] = v || 1))),
-      ));
+      el("h3", { textContent: T("sBars") }),
+      row(T("barTop"), num(cfg.bars.top, 0, 60, 1, (v) => { cfg.bars.top = Math.min(60, Math.max(0, v || 0)); })),
+      row(T("barBottom"), num(cfg.bars.bottom, 0, 60, 1, (v) => { cfg.bars.bottom = Math.min(60, Math.max(0, v || 0)); })),
+      el("p", { className: "hint", textContent: A("barsLocalOnly") })));
 
     // Backup
     const file = el("input", { type: "file", accept: "application/json,.json", style: "display:none", onchange: () => file.files[0] && importData(file.files[0]) });
@@ -475,6 +665,12 @@
   $("#form").onsubmit = (e) => { e.preventDefault(); if (go($("#url").value)) $("#url").value = ""; };
   $("#paste").onclick = async () => { try { $("#url").value = await navigator.clipboard.readText(); $("#form").requestSubmit(); } catch { $("#url").focus(); } };
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+  // Local files: picker button, and drag & drop anywhere on the page (computers)
+  wireLocalVideo();
+  $("#lfile").onchange = (e) => { if (e.target.files.length) handleFiles(e.target.files); e.target.value = ""; };
+  addEventListener("dragover", (e) => e.preventDefault());
+  addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
 
   // ?v=ID (reload), or a link shared to the installed app (?url= / ?text=)
   const qs = new URLSearchParams(location.search);

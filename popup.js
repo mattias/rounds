@@ -206,6 +206,7 @@
       const existing = await chrome.storage.local.get(null);
       const patch = {};
       for (const [k, rec] of Object.entries(d.videos)) {
+        if (k.startsWith("local:")) continue; // local files are only in the mobile app (for now)
         const key = /^(youtube|netflix):/.test(k) ? k : "youtube:" + k;
         const old = existing[key] || {};
         patch[key] = { on: old.on ?? !!rec.text, text: rec.text || "", clips: rec.clips || {} };
@@ -213,7 +214,7 @@
       if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10; entries without "site" came from the mobile app (YouTube)
         const seen = new Set();
         const mine = Array.isArray(existing.history) ? existing.history : [];
-        const incoming = d.history.filter((e) => e && e.id).map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
+        const incoming = d.history.filter((e) => e && e.id && e.kind !== "local").map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
         patch.history = [...incoming, ...mine].sort((a, b) => (b.ts || 0) - (a.ts || 0))
           .filter((e) => { const k = e.site + ":" + e.id; return !seen.has(k) && seen.add(k); }).slice(0, 10);
         recent = patch.history;
