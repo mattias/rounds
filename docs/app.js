@@ -15,6 +15,25 @@
       exportB: "Export", importB: "Import", exportHint: "Save your blocks, clips and settings as a file, or load a file from another device.",
       imported: "Imported {0} video(s).", importBad: "Not a Rounds backup file.", exported: "Backup saved.",
       noEmbed: "This video cannot be played here (embedding is disabled).", rate: "Playing at {0}x on this device.",
+      syncT: "Subtitle timing",
+      syncHint: "Subtitles too early or too late? Fix it here. It is saved for this file.",
+      syncOffset: "Shift (s)",
+      syncReset: "Reset",
+      syncScale: "Speed correction ×{0}",
+      syncLine: "Sync to a line you hear",
+      syncNearest: "Line at current position",
+      syncHere: "This line is playing now",
+      syncOne: "Shifted. For drift, play on, pick a line much later in the video and press the button again.",
+      syncTwo: "Synced with both shift and speed.",
+      syncAuto: "Automatic",
+      syncAutoRef: "Match the embedded track",
+      syncAutoListen: "Match by listening (about a minute)",
+      syncListening: "Listening… {0}%",
+      syncCancel: "Cancel",
+      syncOk: "Synced: shift {0} s, speed ×{1}",
+      syncFail: "No reliable match found. Try the manual sync.",
+      syncNoRef: "There is no embedded track to compare with.",
+      taglineLocal: "Local player: your own videos and subtitles",
       embeddedT: "embedded",
       scanning: "Reading embedded subtitles… {0}%",
       subsNone: "No subtitles yet. Add an .srt, .vtt or .ass file. Text subtitles inside mkv/mp4 files are found automatically (picture-based ones are not supported).",
@@ -42,6 +61,25 @@
       exportB: "エクスポート", importB: "インポート", exportHint: "ブロック・クリップ・設定をファイルに保存、または別の端末のファイルを読み込みます。",
       imported: "{0}件の動画を読み込みました。", importBad: "Roundsのバックアップファイルではありません。", exported: "バックアップを保存しました。",
       noEmbed: "この動画はここでは再生できません（埋め込みが無効）。", rate: "この端末では{0}倍速で再生されています。",
+      syncT: "字幕のタイミング",
+      syncHint: "字幕が早い・遅い場合はここで直します。このファイルに保存されます。",
+      syncOffset: "ずらし（秒）",
+      syncReset: "リセット",
+      syncScale: "速度補正 ×{0}",
+      syncLine: "聞こえているセリフに合わせる",
+      syncNearest: "現在位置のセリフ",
+      syncHere: "このセリフが今流れている",
+      syncOne: "ずらしました。ズレが広がる場合は、動画のかなり後ろでセリフを選んでもう一度押してください。",
+      syncTwo: "ずれと速度の両方を補正しました。",
+      syncAuto: "自動",
+      syncAutoRef: "内蔵トラックに合わせる",
+      syncAutoListen: "音を聞いて合わせる（約1分）",
+      syncListening: "聞き取り中… {0}%",
+      syncCancel: "キャンセル",
+      syncOk: "補正しました：ずらし {0} 秒、速度 ×{1}",
+      syncFail: "確かな一致が見つかりませんでした。手動で合わせてください。",
+      syncNoRef: "比較できる内蔵トラックがありません。",
+      taglineLocal: "ローカルプレーヤー：自分の動画と字幕",
       embeddedT: "内蔵",
       scanning: "内蔵字幕を読み込み中… {0}%",
       subsNone: "字幕がありません。.srt / .vtt / .ass ファイルを追加してください。mkv/mp4内のテキスト字幕は自動で検出されます（画像形式の字幕は非対応）。",
@@ -69,6 +107,25 @@
       exportB: "Exportera", importB: "Importera", exportHint: "Spara dina block, klipp och inställningar som en fil, eller läs in en fil från en annan enhet.",
       imported: "Importerade {0} video(r).", importBad: "Inte en Rounds-säkerhetskopia.", exported: "Säkerhetskopian sparad.",
       noEmbed: "Videon kan inte spelas här (inbäddning är avstängd).", rate: "Spelas i {0}x på den här enheten.",
+      syncT: "Undertextens timing",
+      syncHint: "Undertexten för tidig eller för sen? Fixa det här. Det sparas för den här filen.",
+      syncOffset: "Förskjutning (s)",
+      syncReset: "Återställ",
+      syncScale: "Hastighetskorrigering ×{0}",
+      syncLine: "Synka mot en replik du hör",
+      syncNearest: "Repliken vid nuvarande plats",
+      syncHere: "Den här repliken spelas nu",
+      syncOne: "Förskjuten. Vid glidning: spela vidare, välj en replik långt senare i videon och tryck igen.",
+      syncTwo: "Synkad med både förskjutning och hastighet.",
+      syncAuto: "Automatiskt",
+      syncAutoRef: "Matcha mot det inbyggda spåret",
+      syncAutoListen: "Matcha genom att lyssna (cirka en minut)",
+      syncListening: "Lyssnar… {0}%",
+      syncCancel: "Avbryt",
+      syncOk: "Synkad: förskjutning {0} s, hastighet ×{1}",
+      syncFail: "Hittade ingen säker matchning. Prova den manuella synken.",
+      syncNoRef: "Det finns inget inbyggt spår att jämföra med.",
+      taglineLocal: "Lokal spelare: dina egna videor och undertexter",
       embeddedT: "inbyggd",
       scanning: "Läser inbyggda undertexter… {0}%",
       subsNone: "Inga undertexter än. Lägg till en .srt-, .vtt- eller .ass-fil. Textundertexter inuti mkv/mp4 hittas automatiskt (bildbaserade stöds inte).",
@@ -97,7 +154,7 @@
   let T = makeT(cfg.uiLang);
   const A = (k, ...a) => ((APP[cfg.uiLang] || APP.en)[k] ?? APP.en[k] ?? k).replace(/\{(\d+)\}/g, (_, i) => a[+i]);
   const saveCfg = () => setJ(CFG_KEY, cfg);
-  const saveVid = () => S.vid && setJ(VID_PREFIX + S.vid, { text: S.text, clips: S.clips });
+  const saveVid = () => S.vid && setJ(VID_PREFIX + S.vid, { text: S.text, clips: S.clips, ...(S.mode === "local" ? { sync: S.sync } : {}) });
 
   // ---------- Helpers ----------
   const $ = (s, r = document) => r.querySelector(s);
@@ -123,10 +180,13 @@
   const newState = (mode) => ({
     mode, vid: null, text: "", blocks: [], clips: {}, cur: -1, round: 1, active: false, pass: 0, clip: 0,
     markStart: null, msg: null, lock: 0, ready: false, dur: 0, rateSeen: null, noEmbed: false,
-    local: null, // local files: { name, url, tracks: [{ name, buf, enc, cues }], sel, err }
+    local: null, // local files: { name, url, tracks: [{ name, buf, enc, base, cues, sync }], sel, err }
+    sync: {}, // local files: subtitle timing per track name: { offset, scale }
   });
   const states = { youtube: newState("youtube"), local: newState("local") };
-  let S = states.youtube;
+  // Inside the browser extension (local.html) the same code runs without YouTube; boot.js shares the storage.
+  const EXT = !!(window.chrome && chrome.runtime && chrome.runtime.id);
+  let S = EXT ? states.local : states.youtube;
   window.__rounds = { states, get S() { return S; }, get yt() { return yt; } }; // handy for debugging in the console
   const ROUND_COVER = { 1: true, 2: false, 3: false, 4: true }; // rounds that hide text / cover hard-coded subtitles
 
@@ -175,7 +235,7 @@
   }
   // ---------- History (the last 10 videos) ----------
   const HIST_KEY = "rounds:history", HIST_MAX = 10;
-  let view = "player"; // "player" | "history"
+  let view = EXT ? "local" : "player"; // "player" | "local" | "history"
   const getHist = () => (Array.isArray(getJ(HIST_KEY)) ? getJ(HIST_KEY) : []);
   function touchHist(id, extra = {}) {
     const all = getHist(), old = all.find((e) => e.id === id);
@@ -257,7 +317,9 @@
   function reparse(tr) {
     const d = Subs.decode(tr.buf, tr.enc, langCode());
     tr.used = d.enc;
-    tr.cues = Subs.parse(d.text, tr.name);
+    tr.base = Subs.parse(d.text, tr.name);
+    tr.sync = states.local.sync[tr.name];
+    tr.cues = Sync.applySync(tr.base, tr.sync);
   }
   function loadLocalVideo(file) {
     S = states.local;
@@ -267,7 +329,7 @@
     S.vid = key; S.cur = -1; S.active = false; S.msg = null; S.ready = false; S.dur = 0; self.__dur = 0;
     S.local = { name: file.name, url: URL.createObjectURL(file), tracks: [], sel: -1, err: false };
     const rec = getJ(VID_PREFIX + key);
-    S.text = rec?.text || ""; S.clips = rec?.clips || {}; S.blocks = [];
+    S.text = rec?.text || ""; S.clips = rec?.clips || {}; S.blocks = []; S.sync = rec?.sync || {};
     touchHist(key, { kind: "local", title: file.name });
     lv().src = S.local.url;
     lv().load();
@@ -299,7 +361,9 @@
     L.scan = null;
     if (res) {
       for (const t of res.tracks) {
-        L.tracks.push({ name: `${t.lang || "?"}${t.name ? " · " + t.name : ""} (${A("embeddedT")})`, buf: null, enc: "auto", cues: t.cues, lang: t.lang, embedded: true });
+        const name = `${t.lang || "?"}${t.name ? " · " + t.name : ""} (${A("embeddedT")})`;
+        const sync = states.local.sync[name];
+        L.tracks.push({ name, buf: null, enc: "auto", base: t.cues, sync, cues: Sync.applySync(t.cues, sync), lang: t.lang, embedded: true });
       }
       if (L.sel < 0 && L.tracks.length) { // prefer the study language, then the track with most lines
         const want = langCode(), emb = L.tracks.filter((t) => t.embedded);
@@ -310,6 +374,152 @@
     }
     render();
   }
+  // ---------- Subtitle timing (local files): by hand, against an embedded track, or by listening ----------
+  const CONF_MIN = 4.5; // how clearly the subtitles must match the speech (standard deviations above chance)
+  function setTrackSync(tr, sync) {
+    const L = states.local, k = (sync && sync.scale) || 1;
+    if (!sync || (!sync.offset && k === 1)) delete L.sync[tr.name];
+    else L.sync[tr.name] = { offset: +sync.offset.toFixed(3), scale: +k.toFixed(6) };
+    tr.sync = L.sync[tr.name];
+    tr.cues = Sync.applySync(tr.base, tr.sync);
+    saveVid();
+  }
+  // a further correction  K * shown + c  on top of what is shown now
+  const compose = (tr, K, c) => ({ offset: K * ((tr.sync && tr.sync.offset) || 0) + c, scale: K * ((tr.sync && tr.sync.scale) || 1) });
+  const nearestCue = (cues, t) => { // the cue whose start is closest to t (you press just after a line begins)
+    let lo = 0, hi = cues.length - 1, idx = 0;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (cues[m].s <= t + 1e-6) { idx = m; lo = m + 1; } else hi = m - 1; }
+    const next = cues[idx + 1];
+    return next && Math.abs(next.s - t) < Math.abs(cues[idx].s - t) ? idx + 1 : idx;
+  };
+  function syncHere(tr, idx) { // "this line is playing right now" (once, or twice far apart to fix drift too)
+    const L = states.local, t = lv().currentTime, b = tr.base[idx].s, a = L.anchor1, k0 = (tr.sync && tr.sync.scale) || 1;
+    if (a && Math.abs(b - a.b) > 60) {
+      const k = (t - a.t) / (b - a.b);
+      if (k > 0.9 && k < 1.1) { setTrackSync(tr, { scale: k, offset: a.t - a.b * k }); L.anchor1 = null; L.syncMsg = A("syncTwo"); return render(); }
+    }
+    L.anchor1 = { b, t };
+    setTrackSync(tr, { scale: k0, offset: t - b * k0 });
+    L.syncMsg = A("syncOne");
+    render();
+  }
+  function autoRef(tr) {
+    const L = states.local, ref = L.local.tracks.find((t) => t !== tr && t.embedded);
+    if (!ref) { L.syncMsg = A("syncNoRef"); return render(); }
+    const r = Sync.alignToReference(tr.base, ref.base);
+    if (!r) { L.syncMsg = A("syncFail"); return render(); }
+    setTrackSync(tr, { offset: r.offset, scale: r.scale });
+    L.syncMsg = A("syncOk", r.offset.toFixed(2), r.scale.toFixed(4));
+    render();
+  }
+  // Listening: play a few minutes fast and silent, measure how loud the speech is, compare with when cues are shown.
+  let actx = null, tap = null;
+  function audioTap() {
+    if (tap) return tap;
+    const v = lv();
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = actx.createMediaElementSource(v), gain = actx.createGain();
+    const hp = actx.createBiquadFilter(), lp = actx.createBiquadFilter(), proc = actx.createScriptProcessor(1024, 1, 1);
+    hp.type = "highpass"; hp.frequency.value = 300; lp.type = "lowpass"; lp.frequency.value = 3400; // roughly the speech band
+    src.connect(gain); gain.connect(actx.destination); // normal playback goes through here from now on
+    src.connect(hp); hp.connect(lp); lp.connect(proc); proc.connect(actx.destination);
+    tap = { gain, on: false, vals: [], t0: 0 };
+    proc.onaudioprocess = (e) => {
+      if (!tap.on) return;
+      const d = e.inputBuffer.getChannelData(0);
+      let s = 0;
+      for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+      if (!tap.vals.length) tap.t0 = lv().currentTime;
+      tap.vals.push(Math.sqrt(s / d.length));
+    };
+    return tap;
+  }
+  async function captureWindow(w0, w1, rate, cancelled, onPct) {
+    const v = lv(), t = audioTap();
+    await actx.resume();
+    v.pause(); v.currentTime = w0;
+    if (v.seeking) await new Promise((r) => v.addEventListener("seeked", r, { once: true }));
+    t.vals = []; t.on = true; v.playbackRate = rate;
+    try { await v.play(); } catch { /* blocked: nothing to measure */ }
+    while (!cancelled() && !v.ended && !v.paused && v.currentTime < w1) { onPct((v.currentTime - w0) / (w1 - w0)); await new Promise((r) => setTimeout(r, 200)); }
+    t.on = false; v.pause();
+    return { vals: t.vals.slice(), t0: t.t0, bin: (1024 / actx.sampleRate) * rate };
+  }
+  async function listenSync(tr) {
+    const L = states.local, v = lv();
+    if (!L.local || !(v.duration > 20)) return;
+    const prev = { t: v.currentTime, rate: v.playbackRate, playing: !v.paused };
+    L.listen = { pct: 0, cancel: false }; L.syncMsg = null; render();
+    const dur = v.duration, span = Math.min(150, dur * 0.4);
+    const centers = dur > 900 ? [dur * 0.25, dur * 0.7] : [dur * 0.5], found = [];
+    let shown = -1;
+    try {
+      audioTap().gain.gain.value = 0; // silent while measuring
+      for (let i = 0; i < centers.length; i++) {
+        const w0 = Math.max(0, centers[i] - span / 2), w1 = Math.min(dur, w0 + span);
+        const cap = await captureWindow(w0, w1, 4, () => L.listen.cancel, (p) => {
+          L.listen.pct = (i + p) / centers.length;
+          const s = Math.floor(L.listen.pct * 20);
+          if (s !== shown) { shown = s; render(); }
+        });
+        if (L.listen.cancel) break;
+        const r = Sync.correlate(cap.vals, cap.bin, cap.t0, tr.cues);
+        if (r) found.push({ T: cap.t0 + (cap.vals.length * cap.bin) / 2, d: r.offset, conf: r.confidence });
+      }
+    } catch { /* reported below as "no reliable match" */ }
+    if (tap) tap.gain.gain.value = 1;
+    v.playbackRate = prev.rate; v.currentTime = prev.t; if (!prev.playing) v.pause();
+    const cancelled = L.listen.cancel;
+    L.listen = null;
+    const good = found.filter((f) => f.conf >= CONF_MIN);
+    if (cancelled) L.syncMsg = null;
+    else if (!good.length) L.syncMsg = A("syncFail");
+    else {
+      let next;
+      if (good.length === 2 && Math.abs(good[1].d - good[0].d) >= 0.6 && good[1].T - good[0].T > 300) {
+        const tp = Sync.fromTwoPoints(good[0].T, good[0].d, good[1].T, good[1].d);
+        next = tp.scale > 0.9 && tp.scale < 1.1 ? compose(tr, tp.scale, tp.offset) : compose(tr, 1, good[0].d);
+      } else next = compose(tr, 1, good.reduce((s, g) => s + g.d, 0) / good.length);
+      setTrackSync(tr, next);
+      L.syncMsg = A("syncOk", next.offset.toFixed(2), next.scale.toFixed(4));
+    }
+    render();
+  }
+  function syncSection(tr) {
+    const L = states.local, sy = tr.sync || { offset: 0, scale: 1 };
+    const nudge = (d) => el("button", { textContent: (d > 0 ? "+" : "") + d, onclick: () => { setTrackSync(tr, { offset: (sy.offset || 0) + d, scale: sy.scale || 1 }); render(); } });
+    const input = el("input", { type: "number", step: 0.1, value: +(sy.offset || 0).toFixed(2), style: "width:84px",
+      onchange: () => { setTrackSync(tr, { offset: Number(input.value) || 0, scale: sy.scale || 1 }); render(); } });
+    const idx = Math.min(L.anchorIdx != null ? L.anchorIdx : nearestCue(tr.cues, lv().currentTime), Math.max(0, tr.cues.length - 1));
+    const line = tr.cues[idx];
+    const parts = [
+      el("p", { className: "hint", textContent: A("syncHint") }),
+      el("div", { className: "row" }, el("label", { textContent: A("syncOffset") }), nudge(-1), nudge(-0.1), input, nudge(0.1), nudge(1),
+        el("button", { textContent: A("syncReset"), onclick: () => { setTrackSync(tr, null); L.anchor1 = null; L.syncMsg = null; render(); } })),
+    ];
+    if (sy.scale && sy.scale !== 1) parts.push(el("p", { className: "hint", textContent: A("syncScale", sy.scale.toFixed(4)) }));
+    if (line) {
+      parts.push(el("h3", { textContent: A("syncLine") }),
+        el("div", { className: "row" },
+          el("button", { textContent: "◀", onclick: () => { L.anchorIdx = Math.max(0, idx - 1); render(); } }),
+          el("span", { className: "grow hint", textContent: `${fmt(line.s)} · ${line.text.replace(/\n/g, " ")}` }),
+          el("button", { textContent: "▶", onclick: () => { L.anchorIdx = Math.min(tr.cues.length - 1, idx + 1); render(); } })),
+        el("div", { className: "row" },
+          el("button", { textContent: "🎯 " + A("syncNearest"), onclick: () => { L.anchorIdx = null; render(); } }),
+          el("button", { className: "primary", textContent: A("syncHere"), onclick: () => syncHere(tr, idx) })));
+    }
+    if (L.listen) {
+      parts.push(el("div", { className: "row" }, el("span", { className: "grow hint", textContent: A("syncListening", Math.round(L.listen.pct * 100)) }),
+        el("button", { textContent: A("syncCancel"), onclick: () => { L.listen.cancel = true; } })));
+    } else {
+      parts.push(el("h3", { textContent: A("syncAuto") }), el("div", { className: "row" },
+        ...(!tr.embedded && L.local.tracks.some((t) => t.embedded && t !== tr) ? [el("button", { textContent: A("syncAutoRef"), onclick: () => autoRef(tr) })] : []),
+        el("button", { textContent: "🎧 " + A("syncAutoListen"), onclick: () => listenSync(tr) })));
+    }
+    if (L.syncMsg) parts.push(el("p", { className: "warn", textContent: L.syncMsg }));
+    return section("sync", A("syncT"), ...parts);
+  }
+
   async function handleFiles(list) {
     const files = [...list];
     const video = files.find((f) => VIDEO_EXT.test(f.name) || /^(video|audio)\//.test(f.type));
@@ -480,7 +690,7 @@
       for (const [k, rec] of Object.entries(d.videos)) {
         if (k.startsWith("netflix:")) continue;
         const id = k.replace(/^youtube:/, "");
-        imported[id] = { text: rec.text || "", clips: rec.clips || {} };
+        imported[id] = { text: rec.text || "", clips: rec.clips || {}, ...(rec.sync ? { sync: rec.sync } : {}) };
         setJ(VID_PREFIX + id, imported[id]); n++;
       }
       if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10
@@ -536,7 +746,7 @@
     const keepScroll = window.scrollY;
     root.replaceChildren();
     document.title = "Rounds";
-    $("#tagline").textContent = A("tagline");
+    $("#tagline").textContent = A(EXT ? "taglineLocal" : "tagline");
     $("#url").placeholder = A("urlPh");
     $("#load").textContent = A("load");
 
@@ -552,11 +762,11 @@
     // Tabs: YouTube player / local files / history
     const tabs = $("#tabs");
     tabs.replaceChildren(
-      el("button", { className: view === "player" ? "on" : "", textContent: "▶ " + A("playerT"), onclick: () => setView("player") }),
+      ...(EXT ? [] : [el("button", { className: view === "player" ? "on" : "", textContent: "▶ " + A("playerT"), onclick: () => setView("player") })]),
       el("button", { className: view === "local" ? "on" : "", textContent: "🎞 " + A("localT"), onclick: () => setView("local") }),
       el("button", { className: view === "history" ? "on" : "", textContent: "🕘 " + A("histT"), onclick: () => setView("history") }));
     tabs.style.display = "flex";
-    $("#form").style.display = view === "local" ? "none" : "flex";
+    $("#form").style.display = EXT || view === "local" ? "none" : "flex";
     $("#player-wrap").style.display = view === "player" && states.youtube.vid ? "block" : "none";
     $("#local-wrap").style.display = view === "local" && states.local.vid ? "block" : "none";
     applyLocalView();
@@ -647,6 +857,7 @@
         }
         box.append(el("button", { textContent: "📂 " + A("subsAdd"), onclick: () => $("#lfile").click() }));
         root.append(box);
+        if (tr && !tr.embedded) root.append(syncSection(tr)); // embedded tracks are already in step with the video
       }
 
       // Block editor
@@ -707,7 +918,7 @@
   }
   $("#form").onsubmit = (e) => { e.preventDefault(); if (go($("#url").value)) $("#url").value = ""; };
   $("#paste").onclick = async () => { try { $("#url").value = await navigator.clipboard.readText(); $("#form").requestSubmit(); } catch { $("#url").focus(); } };
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if (!EXT && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   // Local files: picker button, and drag & drop anywhere on the page (computers)
   wireLocalVideo();
@@ -719,5 +930,12 @@
   const qs = new URLSearchParams(location.search);
   render();
   const first = qs.get("v") || qs.get("url") || qs.get("text") || qs.get("title");
-  if (first && cfg.onboarded) go(first);
+  if (first && cfg.onboarded && !EXT) go(first);
+  // From the extension popup's recent list: a local file must be picked again
+  const reopenKey = EXT && decodeURIComponent((location.hash.match(/reopen=([^&]*)/) || [])[1] || "");
+  if (reopenKey) {
+    const e = getHist().find((x) => x.id === reopenKey);
+    states.local.msg = A("reopen", e ? e.title || e.id : reopenKey);
+    render();
+  }
 })();

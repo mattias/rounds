@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rounds · Local</title>
+<link rel="icon" href="icons/icon128.png">
+<link rel="stylesheet" href="docs/style.css">
+</head>
+<body class="ext">
+<header>
+  <img src="icons/icon128.png" alt="" width="36" height="36">
+  <div><h1>Rounds</h1><div id="tagline"></div></div>
+</header>
+<form id="form" style="display:none"><input id="url" type="text"><button type="button" id="paste"></button><button id="load"></button></form>
+<nav id="tabs" style="display:none"></nav>
+<div id="player-wrap"><div id="player-host"></div></div>
+<div id="local-wrap"><video id="lv" playsinline controls></video><div class="lbar" id="lbar-top"></div><div class="lbar" id="lbar-bottom"></div><div id="lsub"></div></div>
+<input id="lfile" type="file" multiple hidden accept="video/*,audio/*,.mkv,.srt,.vtt,.ass,.ssa">
+<main id="ui"></main>
+<script src="shared.js"></script>
+<script src="docs/core.js"></script>
+<script src="docs/subs.js"></script>
+<script src="docs/embed.js"></script>`n<script src="docs/sync.js"></script>
+<script src="boot.js"></script>
+</body>
+</html>

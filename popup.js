@@ -3,7 +3,7 @@
   const { LANGS, UI_LANGS, mergeCfg, makeT } = YR;
   const isTab = location.pathname.endsWith("options.html");
   const app = document.getElementById("app");
-  let cfg, T, info = null, flash = "", recent = [];
+  let cfg, T, info = null, flash = "", recent = [], localRecent = [];
 
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
@@ -71,7 +71,8 @@
       return;
     }
 
-    app.append(el("h1", { textContent: T("title") }));
+    app.append(el("h1", { textContent: T("title") }),
+      el("button", { className: "primary", textContent: "🎞 " + T("openLocal"), onclick: () => chrome.tabs.create({ url: chrome.runtime.getURL("local.html") }) }));
 
     // This video
     if (info) {
@@ -161,15 +162,18 @@
   // The last 10 videos where the panel was used; a click opens the video in a new tab.
   function recentBlock() {
     const wrap = el("div", { className: "recent" }, el("h2", { textContent: T("recentT") }));
-    if (!recent.length) wrap.append(el("p", { className: "hint", textContent: T("recentEmpty") }));
-    for (const e of recent) {
-      const url = e.site === "netflix" ? `https://www.netflix.com/watch/${encodeURIComponent(e.id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(e.id)}`;
+    // Streaming videos and local files in one list, newest first. A local file must be picked again on the local page.
+    const items = [...recent, ...localRecent.map((e) => ({ ...e, site: "local" }))].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 10);
+    if (!items.length) wrap.append(el("p", { className: "hint", textContent: T("recentEmpty") }));
+    for (const e of items) {
+      const url = e.site === "local" ? chrome.runtime.getURL("local.html") + "#reopen=" + encodeURIComponent(e.id)
+        : e.site === "netflix" ? `https://www.netflix.com/watch/${encodeURIComponent(e.id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(e.id)}`;
       wrap.append(el("button", { className: "recentrow", title: e.title || "", onclick: () => chrome.tabs.create({ url }) },
-        el("span", { className: "badge", textContent: e.site === "netflix" ? "N" : "▶" }),
+        el("span", { className: "badge", textContent: e.site === "netflix" ? "N" : e.site === "local" ? "🎞" : "▶" }),
         el("span", { className: "rt", textContent: e.title || `${e.site} ${e.id}` })));
     }
-    if (recent.length) wrap.append(el("div", { className: "row" }, el("button", { textContent: T("recentClear"), onclick: async () => {
-      recent = []; await chrome.storage.local.set({ history: [] }); render(); } })));
+    if (items.length) wrap.append(el("div", { className: "row" }, el("button", { textContent: T("recentClear"), onclick: async () => {
+      recent = []; localRecent = []; await chrome.storage.local.set({ history: [], localHistory: [] }); render(); } })));
     return wrap;
   }
 
@@ -190,10 +194,10 @@
     const all = await chrome.storage.local.get(null);
     const videos = {};
     for (const [k, v] of Object.entries(all)) {
-      if (/^(youtube|netflix):/.test(k)) videos[k] = { text: v.text || "", clips: v.clips || {} };
+      if (/^(youtube|netflix|local):/.test(k)) videos[k] = { text: v.text || "", clips: v.clips || {}, ...(v.sync ? { sync: v.sync } : {}) };
       else if (k.startsWith("vid:") && !videos["youtube:" + k.slice(4)]) videos["youtube:" + k.slice(4)] = { text: v.text || "", clips: v.clips || {} };
     }
-    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos, history: Array.isArray(all.history) ? all.history : [] }, null, 1)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos, history: [...(Array.isArray(all.history) ? all.history : []), ...(Array.isArray(all.localHistory) ? all.localHistory : []).map((e) => ({ ...e, kind: "local" }))] }, null, 1)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: "rounds-backup.json" });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -206,18 +210,22 @@
       const existing = await chrome.storage.local.get(null);
       const patch = {};
       for (const [k, rec] of Object.entries(d.videos)) {
-        if (k.startsWith("local:")) continue; // local files are only in the mobile app (for now)
+        if (k.startsWith("local:")) { patch[k] = { text: rec.text || "", clips: rec.clips || {}, ...(rec.sync ? { sync: rec.sync } : {}) }; continue; } // own files
         const key = /^(youtube|netflix):/.test(k) ? k : "youtube:" + k;
         const old = existing[key] || {};
         patch[key] = { on: old.on ?? !!rec.text, text: rec.text || "", clips: rec.clips || {} };
       }
       if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10; entries without "site" came from the mobile app (YouTube)
-        const seen = new Set();
-        const mine = Array.isArray(existing.history) ? existing.history : [];
-        const incoming = d.history.filter((e) => e && e.id && e.kind !== "local").map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
-        patch.history = [...incoming, ...mine].sort((a, b) => (b.ts || 0) - (a.ts || 0))
-          .filter((e) => { const k = e.site + ":" + e.id; return !seen.has(k) && seen.add(k); }).slice(0, 10);
-        recent = patch.history;
+        const merge = (list, keyOf) => {
+          const seen = new Set();
+          return list.sort((a, b) => (b.ts || 0) - (a.ts || 0)).filter((e) => { const k = keyOf(e); return !seen.has(k) && seen.add(k); }).slice(0, 10);
+        };
+        const valid = d.history.filter((e) => e && e.id);
+        const stream = valid.filter((e) => e.kind !== "local").map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
+        const own = valid.filter((e) => e.kind === "local").map(({ id, title, ts }) => ({ id, title, ts, kind: "local" }));
+        patch.history = merge([...stream, ...(Array.isArray(existing.history) ? existing.history : [])], (e) => e.site + ":" + e.id);
+        patch.localHistory = merge([...own, ...(Array.isArray(existing.localHistory) ? existing.localHistory : [])], (e) => e.id);
+        recent = patch.history; localRecent = patch.localHistory;
       }
       if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); patch.cfg = cfg; T = makeT(cfg.uiLang); }
       await chrome.storage.local.set(patch);
@@ -226,9 +234,10 @@
   }
 
   (async () => {
-    const o = await chrome.storage.local.get(["cfg", "history"]);
+    const o = await chrome.storage.local.get(["cfg", "history", "localHistory"]);
     cfg = mergeCfg(o.cfg);
     recent = Array.isArray(o.history) ? o.history : [];
+    localRecent = Array.isArray(o.localHistory) ? o.localHistory : [];
     T = makeT(cfg.uiLang);
     if (!cfg.onboarded && !isTab) { chrome.runtime.openOptionsPage(); window.close(); return; }
     info = await getInfo();
