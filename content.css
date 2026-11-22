@@ -44,3 +44,4 @@ html[data-yr-hide-subs] .player-timedtext{visibility:hidden!important}
 .yr-bar{position:absolute;left:0;right:0;background:#000;z-index:30;pointer-events:none;display:none}
 .yr-bar#yr-bar-top{top:0}.yr-bar#yr-bar-bottom{bottom:0}
 .yr-bar.netflix{position:fixed;right:auto;bottom:auto;z-index:2147482999}
+.yr-edit{display:flex;flex-direction:column;gap:4px;padding:4px 0 6px 8px;border-left:2px solid #4c82ff}

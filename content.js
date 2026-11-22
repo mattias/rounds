@@ -290,10 +290,33 @@
   function start(i, round) {
     if (!video() || !S.blocks[i]) return;
     if (round) S.round = round;
-    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.active = true; S.msg = null;
+    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.editClip = null; S.active = true; S.msg = null;
     seekPlay();
     setCC(ROUND_CC[S.round]);
     render();
+  }
+  // Fine-tune a clip's start or end. If that clip is looping, the loop restarts at once so you hear the change.
+  function setClipEdge(i, edge, value) {
+    const c = (S.clips[S.cur] || [])[i];
+    if (!c || !isFinite(value)) return;
+    const MIN = 0.3, dur = video()?.duration;
+    value = Math.max(0, Math.round(value * 100) / 100);
+    if (edge === "s") c.s = Math.min(value, c.e - MIN);
+    else c.e = Math.max(value, c.s + MIN);
+    if (isFinite(dur) && c.e > dur) c.e = dur;
+    saveVid();
+    if (S.active && S.round === 3 && S.clip === i) seekPlay();
+    render();
+  }
+  function clipEditor(i, c) {
+    const wrap = el("div", { className: "yr-edit" });
+    for (const [edge, label] of [["s", T("clipStartL")], ["e", T("clipEndL")]]) {
+      const nudge = (d) => el("button", { textContent: (d > 0 ? "+" : "") + d, onclick: () => setClipEdge(i, edge, c[edge] + d) });
+      wrap.append(el("div", { className: "yr-row" }, el("span", { textContent: label, style: "min-width:38px" }),
+        nudge(-0.5), nudge(-0.1), el("b", { textContent: c[edge].toFixed(1), style: "min-width:44px;text-align:center" }), nudge(0.1), nudge(0.5),
+        el("button", { textContent: T("clipNow"), onclick: () => setClipEdge(i, edge, video().currentTime) })));
+    }
+    return wrap;
   }
   // Tap a clip: loop it (until you stop it). Tap it again: stop. Tap another clip while looping: switch to that one.
   function tapClip(i) {
@@ -623,10 +646,15 @@ ${p.tail}`,
     if (S.round === 3 || cs.length) {
       body.append(el("div", { className: "yr-sec", textContent: T("clips") }));
       const cl = el("div", { className: "yr-list" });
-      cs.forEach((c, i) => cl.append(el("div", { className: "yr-clip" },
-        el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
-          title: T("clipTap"), onclick: () => tapClip(i) }),
-        el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; saveVid(); render(); } }))));
+      cs.forEach((c, i) => {
+        cl.append(el("div", { className: "yr-clip" },
+          el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
+            title: T("clipTap"), onclick: () => tapClip(i) }),
+          el("button", { className: "yr-ic" + (S.editClip === i ? " yr-on" : ""), textContent: "✎", title: T("clipEdit"),
+            onclick: () => { S.editClip = S.editClip === i ? null : i; render(); } }),
+          el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; S.editClip = null; saveVid(); render(); } })));
+        if (S.editClip === i) cl.append(clipEditor(i, c));
+      });
       if (!cs.length) cl.append(el("div", { className: "yr-hint", textContent: T("noClips") }));
       body.append(cl, el("button", { textContent: "＋ " + T("markClip"), title: "Alt+M", onclick: markClip }));
       if (SITE === "netflix" && curTrack()) body.append(el("button", { textContent: "＋ " + T("clipLine"), onclick: clipLine }));
