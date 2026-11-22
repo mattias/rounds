@@ -316,15 +316,37 @@
         nudge(-0.5), nudge(-0.1), el("b", { textContent: c[edge].toFixed(1), style: "min-width:44px;text-align:center" }), nudge(0.1), nudge(0.5),
         el("button", { textContent: T("clipNow"), onclick: () => setClipEdge(i, edge, video().currentTime) })));
     }
+    // Deleting is kept away from replay/edit and needs a second, explicit confirmation.
+    wrap.append(S.confirmDel === i
+      ? el("div", { className: "yr-row" }, el("span", { textContent: T("clipDelAsk") }),
+        el("button", { className: "yr-danger", textContent: T("clipDelYes"), onclick: () => deleteClip(i) }),
+        el("button", { textContent: T("clipDelNo"), onclick: () => { S.confirmDel = null; render(); } }))
+      : el("button", { className: "yr-danger-o", textContent: "🗑 " + T("clipDel"), onclick: () => { S.confirmDel = i; render(); } }));
     return wrap;
+  }
+  function deleteClip(i) {
+    if (S.active && S.round === 3 && S.clip === i) { pauseV(); S.active = false; applyView(); }
+    (S.clips[S.cur] || []).splice(i, 1);
+    S.clip = 0; S.editClip = null; S.confirmDel = null;
+    saveVid();
+    render();
   }
   // Tap a clip: loop it (until you stop it). Tap it again: stop. Tap another clip while looping: switch to that one.
   function tapClip(i) {
     if (S.round === 3 && S.active && S.clip === i) return halt();
+    replayClip(i);
+  }
+  // Start a clip over from its beginning (back to the ramp's first speed), whether or not it is looping now.
+  function replayClip(i) {
     S.round = 3; S.clip = i; S.pass = 0; S.solo = true; S.active = true; S.markStart = null; S.msg = null;
     seekPlay();
     setCC(ROUND_CC[3]);
     render();
+  }
+  // The main "replay" button: the clip you are working on if there is one, otherwise the block.
+  function replayCurrent() {
+    if (S.round === 3 && S.solo && (S.clips[S.cur] || [])[S.clip]) return replayClip(S.clip);
+    if (S.cur >= 0) start(S.cur);
   }
   function seekPlay() {
     const v = video(), seg = segment();
@@ -613,7 +635,7 @@ ${p.tail}`,
     // Transport
     body.append(el("div", { className: "yr-row" },
       el("button", { textContent: "⏮", title: T("prev"), onclick: () => start(Math.max(0, S.cur - 1)) }),
-      el("button", { textContent: "↻", title: T("replay"), onclick: () => S.cur >= 0 && start(S.cur) }),
+      el("button", { textContent: "↻", title: T("replay"), onclick: replayCurrent }),
       el("button", { textContent: "⏭", title: T("next"), onclick: () => start(Math.min(S.blocks.length - 1, S.cur + 1)) }),
       el("button", { textContent: "⏹", title: T("stop"), onclick: halt }),
       el("span", { className: "yr-grow" }),
@@ -650,9 +672,9 @@ ${p.tail}`,
         cl.append(el("div", { className: "yr-clip" },
           el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
             title: T("clipTap"), onclick: () => tapClip(i) }),
+          el("button", { className: "yr-ic", textContent: "↻", title: T("clipReplay"), onclick: () => replayClip(i) }),
           el("button", { className: "yr-ic" + (S.editClip === i ? " yr-on" : ""), textContent: "✎", title: T("clipEdit"),
-            onclick: () => { S.editClip = S.editClip === i ? null : i; render(); } }),
-          el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; S.editClip = null; saveVid(); render(); } })));
+            onclick: () => { S.editClip = S.editClip === i ? null : i; S.confirmDel = null; render(); } })));
         if (S.editClip === i) cl.append(clipEditor(i, c));
       });
       if (!cs.length) cl.append(el("div", { className: "yr-hint", textContent: T("noClips") }));
@@ -685,7 +707,7 @@ ${p.tail}`,
     if (["1", "2", "3", "4"].includes(k)) { e.preventDefault(); S.round = Number(k); S.cur >= 0 ? start(S.cur, S.round) : render(); }
     else if (k === "ArrowRight") { e.preventDefault(); start(Math.min(S.blocks.length - 1, S.cur + 1)); }
     else if (k === "ArrowLeft") { e.preventDefault(); start(Math.max(0, S.cur - 1)); }
-    else if (k.toLowerCase() === "r") { e.preventDefault(); if (S.cur >= 0) start(S.cur); }
+    else if (k.toLowerCase() === "r") { e.preventDefault(); replayCurrent(); }
     else if (k.toLowerCase() === "m") { e.preventDefault(); markClip(); }
   }, true);
 

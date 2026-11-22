@@ -613,14 +613,36 @@
         nudge(-0.5), nudge(-0.1), el("b", { textContent: c[edge].toFixed(1), style: "min-width:46px;text-align:center;align-self:center" }), nudge(0.1), nudge(0.5),
         el("button", { textContent: T("clipNow"), onclick: () => setClipEdge(i, edge, E.time()) })));
     }
+    // Deleting is kept away from replay/edit and needs a second, explicit confirmation.
+    wrap.append(S.confirmDel === i
+      ? el("div", { className: "transport" }, el("span", { className: "hint", style: "align-self:center", textContent: T("clipDelAsk") }),
+        el("button", { className: "danger", textContent: T("clipDelYes"), onclick: () => deleteClip(i) }),
+        el("button", { textContent: T("clipDelNo"), onclick: () => { S.confirmDel = null; render(); } }))
+      : el("button", { className: "danger-o", textContent: "🗑 " + T("clipDel"), onclick: () => { S.confirmDel = i; render(); } }));
     return wrap;
+  }
+  function deleteClip(i) {
+    if (S.active && S.round === 3 && S.clip === i) { E.pause(); S.active = false; }
+    (S.clips[S.cur] || []).splice(i, 1);
+    S.clip = 0; S.editClip = null; S.confirmDel = null;
+    saveVid();
+    render();
   }
   // Tap a clip: loop it (until you stop it). Tap it again: stop. Tap another clip while looping: switch to that one.
   function tapClip(i) {
     if (S.round === 3 && S.active && S.clip === i) return halt();
+    replayClip(i);
+  }
+  // Start a clip over from its beginning (back to the ramp's first speed), whether or not it is looping now.
+  function replayClip(i) {
     S.round = 3; S.clip = i; S.pass = 0; S.solo = true; S.active = true; S.markStart = null; S.msg = null;
     seekPlay();
     render();
+  }
+  // The main "replay" button: the clip you are working on if there is one, otherwise the block.
+  function replayCurrent() {
+    if (S.round === 3 && S.solo && (S.clips[S.cur] || [])[S.clip]) return replayClip(S.clip);
+    if (S.cur >= 0) start(S.cur);
   }
   function seekPlay() {
     const seg = segment();
@@ -875,7 +897,7 @@
       // Transport
       root.append(el("div", { className: "transport" },
         el("button", { textContent: "⏮", title: T("prev"), onclick: () => start(Math.max(0, S.cur - 1)) }),
-        el("button", { textContent: "↻", title: T("replay"), onclick: () => S.cur >= 0 && start(S.cur) }),
+        el("button", { textContent: "↻", title: T("replay"), onclick: replayCurrent }),
         el("button", { textContent: "⏭", title: T("next"), onclick: () => start(Math.min(S.blocks.length - 1, S.cur + 1)) }),
         el("button", { textContent: "⏹", title: T("stop"), onclick: halt }),
         el("button", { className: cfg.loop ? "on" : "", textContent: "🔁 " + T("loop"), onclick: () => { cfg.loop = !cfg.loop; saveCfg(); render(); } })));
@@ -907,9 +929,9 @@
           cl.append(el("div", { className: "clip" },
             el("button", { className: S.round === 3 && S.active && i === S.clip ? "on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
               title: T("clipTap"), onclick: () => tapClip(i) }),
+            el("button", { textContent: "↻", title: T("clipReplay"), onclick: () => replayClip(i) }),
             el("button", { className: S.editClip === i ? "on" : "", textContent: "✎", title: T("clipEdit"),
-              onclick: () => { S.editClip = S.editClip === i ? null : i; render(); } }),
-            el("button", { textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; S.editClip = null; saveVid(); render(); } })));
+              onclick: () => { S.editClip = S.editClip === i ? null : i; S.confirmDel = null; render(); } })));
           if (S.editClip === i) cl.append(clipEditor(i, c));
         });
         if (!cs.length) cl.append(el("p", { className: "hint", textContent: T("noClips") }));
