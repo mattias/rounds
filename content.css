@@ -38,7 +38,9 @@
 #yr-panel summary{cursor:pointer;color:var(--dim)}
 #yr-panel details[open] summary{margin-bottom:6px}
 .yr-hint{color:var(--dim);font-size:11px}
-#yr-mask{position:absolute;left:0;right:0;bottom:0;background:#000;z-index:30;pointer-events:none;display:none}
 html[data-yr-hide-subs] .player-timedtext{visibility:hidden!important}
 #yr-panel select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:2px 4px;font:inherit;min-width:0;max-width:140px}
 #yr-panel input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:5px;padding:2px 6px;font:inherit}
+.yr-bar{position:absolute;left:0;right:0;background:#000;z-index:30;pointer-events:none;display:none}
+.yr-bar#yr-bar-top{top:0}.yr-bar#yr-bar-bottom{bottom:0}
+.yr-bar.netflix{position:fixed;right:auto;bottom:auto;z-index:2147482999}

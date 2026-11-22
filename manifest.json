@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "YT Rounds",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Split YouTube and Netflix videos into blocks and run listening-practice rounds with preset speeds, for any language. / YouTubeとNetflixの動画をブロックに分け、速度を設定したラウンドで聞き込み練習。",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "permissions": ["storage"],
   "host_permissions": ["https://www.youtube.com/*", "https://www.netflix.com/*"],
   "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "YT Rounds",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png" }
+  },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
   "content_scripts": [
     {
       "matches": ["https://www.netflix.com/*"],
@@ -16,7 +22,7 @@
     },
     {
       "matches": ["https://www.youtube.com/*", "https://www.netflix.com/*"],
-      "js": ["content.js"],
+      "js": ["shared.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

@@ -2,93 +2,12 @@
   if (window.__yrLoaded) return;
   window.__yrLoaded = true;
 
+  const { mergeCfg, makeT, codeOf } = YR;
   const SITE = location.hostname.includes("netflix") ? "netflix" : "youtube";
 
-  // ---------- i18n (UI: English / 日本語) ----------
-  const I18N = {
-    en: {
-      tab: "Rounds", title: "YT Rounds", off: "Turn off for this video", min: "Collapse", settings: "Settings",
-      r1: "1 · Blind listen", r2: "2 · Parse", r3: "3 · Shadowing", r4: "4 · Receipt",
-      loop: "Loop", prev: "Previous block", next: "Next block", replay: "Replay block", stop: "Stop",
-      blocks: "Blocks", noBlocks: "No blocks yet. Open Settings and add some.",
-      clips: "Clips (round 3)", markClip: "Mark clip", markHint: "Press once at the start, once at the end.",
-      noClips: "No clips: round 3 uses the whole block.",
-      clipStart: (t) => `Clip start ${t}. Press again at the end.`,
-      pick: "Pick a block and a round.", stopped: "Stopped.",
-      status: (b, r, x) => `Block ${b} · Round ${r} · ${x}x`,
-      status3: (c, p, n) => ` · clip ${c} · pass ${p}/${n}`,
-      mask: "Cover subtitles", maskUnit: "% of height (YouTube bar; Netflix hides its own subtitles)",
-      from: "from", to: "to", passes: "passes",
-      r3cfg: "Round 3 speed ramp", edit: "Edit blocks", save: "Save", fromDesc: "Get chapters from description",
-      noChapters: "No chapters found in the description.",
-      format: "One per line:  0:00 - 3:36 Name   (or chapters:  0:00 Name)",
-      keys: "Alt+1–4 round · Alt+←/→ block · Alt+R replay · Alt+M mark clip",
-      gemini: "Gemini", geminiTip: "Open Gemini in a side window", lang: "Language",
-      copyPrompt: "Copy prompt", copied: "Prompt copied. Paste it into Gemini.",
-      langs: "Languages", target: "I am learning", native: "My language (feedback)",
-      subs: "Subtitles", noSubs: "No subtitles captured yet. In Netflix, turn on subtitles in the language you study, then reload the episode.",
-      track: (l, n) => `${l || "?"} · ${n} lines`, dlSrt: "Download .srt",
-      needSubs: "No subtitles captured, so the prompt cannot include them. See Subtitles.",
-      subsCopiedHint: "Prompt with full subtitles copied. Paste it into Gemini.",
-    },
-    ja: {
-      tab: "ラウンド", title: "YTラウンド", off: "この動画ではオフ", min: "たたむ", settings: "設定",
-      r1: "1 · ブラインド", r2: "2 · 構文分解", r3: "3 · シャドーイング", r4: "4 · 確認",
-      loop: "ループ", prev: "前のブロック", next: "次のブロック", replay: "もう一度", stop: "停止",
-      blocks: "ブロック", noBlocks: "ブロックがありません。設定から追加してください。",
-      clips: "クリップ（ラウンド3）", markClip: "クリップを記録", markHint: "開始と終了で1回ずつ押します。",
-      noClips: "クリップなし：ラウンド3はブロック全体を使います。",
-      clipStart: (t) => `クリップ開始 ${t}。終了位置でもう一度押してください。`,
-      pick: "ブロックとラウンドを選んでください。", stopped: "停止中",
-      status: (b, r, x) => `ブロック${b} · ラウンド${r} · ${x}倍速`,
-      status3: (c, p, n) => ` · クリップ${c} · ${p}/${n}回目`,
-      mask: "字幕を隠す", maskUnit: "％（高さ。YouTubeはバー、Netflixは字幕自体を非表示）",
-      from: "開始", to: "終了", passes: "回数",
-      r3cfg: "ラウンド3の速度ランプ", edit: "ブロックを編集", save: "保存", fromDesc: "概要欄のチャプターを取得",
-      noChapters: "概要欄にチャプターが見つかりません。",
-      format: "1行に1つ：  0:00 - 3:36 名前  （チャプター形式： 0:00 名前）",
-      keys: "Alt+1–4 ラウンド · Alt+←/→ ブロック · Alt+R もう一度 · Alt+M クリップ",
-      gemini: "Gemini", geminiTip: "Geminiを別ウィンドウで開く", lang: "言語",
-      copyPrompt: "プロンプトをコピー", copied: "コピーしました。Geminiに貼り付けてください。",
-      langs: "言語", target: "学習している言語", native: "自分の言語（解説・フィードバック）",
-      subs: "字幕", noSubs: "字幕をまだ取得していません。Netflixで学習言語の字幕をオンにして、エピソードを再読み込みしてください。",
-      track: (l, n) => `${l || "?"} · ${n}行`, dlSrt: ".srtをダウンロード",
-      needSubs: "字幕が取得できていないため、プロンプトに含められません。「字幕」を確認してください。",
-      subsCopiedHint: "字幕全文つきのプロンプトをコピーしました。Geminiに貼り付けてください。",
-    },
-  };
-  let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
-  const T = (k, ...a) => {
-    const v = I18N[lang][k];
-    return typeof v === "function" ? v(...a) : v;
-  };
-
-  // Languages offered in the settings (free text is accepted too).
-  const LANGS = [
-    ["ja", "Japanese"], ["en", "English"], ["sv", "Swedish"], ["zh", "Chinese"], ["ko", "Korean"],
-    ["es", "Spanish"], ["fr", "French"], ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"],
-    ["ru", "Russian"], ["ar", "Arabic"], ["hi", "Hindi"], ["nl", "Dutch"], ["pl", "Polish"],
-    ["tr", "Turkish"], ["th", "Thai"], ["vi", "Vietnamese"], ["id", "Indonesian"], ["fi", "Finnish"],
-    ["da", "Danish"], ["no", "Norwegian"], ["uk", "Ukrainian"], ["he", "Hebrew"], ["el", "Greek"],
-    ["cs", "Czech"], ["hu", "Hungarian"], ["ro", "Romanian"],
-  ];
-  const codeOf = (name) => {
-    const n = String(name || "").trim().toLowerCase();
-    const f = LANGS.find(([c, nm]) => nm.toLowerCase() === n || c === n);
-    return f ? f[0] : null;
-  };
-
-  // ---------- Defaults ----------
-  const DEFAULT_CFG = {
-    speed: { 1: 0.85, 2: 1.0, 4: 1.0 },
-    r3: { from: 0.9, to: 1.0, passes: 4 },
-    maskH: 24,
-    loop: false,
-    lang: null,
-    langs: { target: "Japanese", native: "English" },
-  };
-  const ROUND_MASK = { 1: true, 2: false, 3: false, 4: true };
-  const ROUND_CC = { 1: false, 2: true, 3: null, 4: false }; // null = leave as is (YouTube only)
+  // Which rounds show the cover bars / hide subtitles, and the CC state wanted (YouTube only; null = leave).
+  const ROUND_COVER = { 1: true, 2: false, 3: false, 4: true };
+  const ROUND_CC = { 1: false, 2: true, 3: null, 4: false };
 
   // ---------- Helpers ----------
   const $ = (s, r = document) => r.querySelector(s);
@@ -105,7 +24,7 @@
     return `${Math.floor(s / 3600)}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
   };
   const fmtSrt = (s) => {
-    const ms = Math.round((s % 1) * 1000), t = Math.floor(s);
+    const t = Math.floor(s), ms = Math.round((s - t) * 1000);
     return `${pad(Math.floor(t / 3600))}:${pad(Math.floor((t % 3600) / 60))}:${pad(t % 60)},${String(ms).padStart(3, "0")}`;
   };
   const vidFromPath = (p) =>
@@ -125,25 +44,49 @@
 
   // ---------- State ----------
   const S = {
-    vid: null, on: false, text: "", blocks: [], clips: {}, cfg: structuredClone(DEFAULT_CFG),
+    vid: null, on: false, text: "", blocks: [], clips: {}, cfg: mergeCfg(null),
     cur: -1, round: 1, active: false, pass: 0, clip: 0, markStart: null, msg: null,
     tracks: new Map(), trackSel: null, lock: 0,
   };
+  let T = makeT(S.cfg.uiLang);
+  function applyCfg(c) {
+    S.cfg = mergeCfg(c);
+    T = makeT(S.cfg.uiLang);
+  }
 
-  // "0:00 - 3:36 Name"  or chapters "0:00 Name" (ends where the next begins)
+  // Tolerant block parser. Accepts what Gemini (or a person) tends to write, one block per line:
+  //   0:00 - 3:36 Name              00:00:16 – 00:04:29 | Title        Block 1, 0:00:16 – 0:04:29, Title
+  //   | 1 | 0:16 – 4:29 | Title |  * **Block 1 (`00:00 – 03:36`):** Title    1. 0:16-4:29 Title
+  //   0:00 Name  (chapters: ends where the next begins)
+  // Header rows without times are skipped. Times are m:ss or h:mm:ss; separators - – — ~ 〜 → to.
+  const TIME = "\\d{1,2}(?::\\d{1,2}){1,2}(?:[.,]\\d+)?";
+  const RANGE_RE = new RegExp(`(${TIME})\\s*(?:[-–—―~〜～→]|->|to|until|から)\\s*(${TIME})`, "i");
+  const SINGLE_RE = new RegExp(`^\\W{0,6}(${TIME})\\b`);
+  const clean = (s) => s.replace(/[`*_#>|]/g, " ").replace(/\s+/g, " ").replace(/^[\s:：,，;\-–—.)\]]+|[\s:：,，;\-–—.([]+$/g, "").trim();
+  function labelFrom(rest, before) {
+    // Pieces on both sides of the time range, split on table/CSV separators.
+    // Commas only separate the part before the times ("ブロック 1,0:00 – 1:00,Title"); the title keeps its own commas.
+    const cells = [...before.split(/[|\t,，]/), ...rest.split(/[|\t]/)].map(clean).filter(Boolean);
+    return cells.join(" · ");
+  }
   function parseBlocks(text) {
     const dur = video()?.duration || 1e9;
     const out = [];
-    for (const line of text.split(/\r?\n/)) {
-      const l = line.trim();
+    for (const raw of text.split(/\r?\n/)) {
+      const l = raw.replace(/\([^()]*?(\d{1,2}(?::\d{1,2}){1,2})\s*(?:[-–—~〜→]|to)\s*[^()]*?\)/g, (m) => m.replace(/[()]/g, " ")).trim();
       if (!l) continue;
-      let m = l.match(/^(\d+(?::\d+){1,2})\s*[-–—~]\s*(\d+(?::\d+){1,2})\s*(.*)$/);
-      if (m) { out.push({ s: toSec(m[1]), e: toSec(m[2]), label: m[3] || "" }); continue; }
-      m = l.match(/^(\d+(?::\d+){1,2})\s+(.*)$/);
-      if (m) out.push({ s: toSec(m[1]), e: null, label: m[2] });
+      let m = l.match(RANGE_RE);
+      if (m) {
+        const idx = m.index;
+        const label = labelFrom(l.slice(idx + m[0].length), l.slice(0, idx));
+        out.push({ s: toSec(m[1].replace(",", ".")), e: toSec(m[2].replace(",", ".")), label });
+        continue;
+      }
+      m = l.match(SINGLE_RE);
+      if (m) out.push({ s: toSec(m[1].replace(",", ".")), e: null, label: clean(l.slice(m[0].length)) });
     }
     out.forEach((b, i) => { if (b.e == null) b.e = out[i + 1] ? out[i + 1].s : dur; });
-    return out;
+    return out.filter((b) => b.e > b.s);
   }
 
   // ---------- Player control ----------
@@ -282,6 +225,46 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
+  // ---------- Cover bars ----------
+  const uiHost = () => {
+    const f = document.fullscreenElement;
+    return f && f.tagName !== "VIDEO" ? f : document.body;
+  };
+  function ensureBars() {
+    const host = SITE === "youtube" ? $("#movie_player") : uiHost();
+    if (!host) return;
+    for (const pos of ["top", "bottom"]) {
+      let b = $("#yr-bar-" + pos);
+      if (!b) b = el("div", { id: "yr-bar-" + pos, className: "yr-bar " + SITE });
+      if (b.parentElement !== host) host.append(b);
+    }
+  }
+  function placeBars() {
+    if (SITE !== "netflix") return;
+    const v = video();
+    if (!v) return;
+    const r = v.getBoundingClientRect(), b = S.cfg.bars.netflix;
+    const top = $("#yr-bar-top"), bot = $("#yr-bar-bottom");
+    if (top) Object.assign(top.style, { left: r.left + "px", width: r.width + "px", top: r.top + "px", height: (r.height * b.top) / 100 + "px" });
+    if (bot) {
+      const h = (r.height * b.bottom) / 100;
+      Object.assign(bot.style, { left: r.left + "px", width: r.width + "px", top: r.bottom - h + "px", height: h + "px" });
+    }
+  }
+  function applyView() {
+    const cover = S.on && S.active && ROUND_COVER[S.round];
+    document.documentElement.toggleAttribute("data-yr-hide-subs", SITE === "netflix" && !!cover);
+    ensureBars();
+    const b = S.cfg.bars[SITE];
+    for (const pos of ["top", "bottom"]) {
+      const bar = $("#yr-bar-" + pos);
+      if (!bar) continue;
+      bar.style.display = cover && b[pos] > 0 ? "block" : "none";
+      if (SITE === "youtube") bar.style.height = b[pos] + "%";
+    }
+    placeBars();
+  }
+
   // ---------- Playback ----------
   function segment() {
     const b = S.blocks[S.cur];
@@ -302,17 +285,6 @@
     const btn = $(".ytp-subtitles-button");
     if (!btn || btn.style.display === "none") return;
     if ((btn.getAttribute("aria-pressed") === "true") !== want) btn.click();
-  }
-  function applyView() {
-    const hide = S.on && S.active && ROUND_MASK[S.round];
-    if (SITE === "netflix") {
-      document.documentElement.toggleAttribute("data-yr-hide-subs", !!hide);
-      return;
-    }
-    const mask = $("#yr-mask");
-    if (!mask) return;
-    mask.style.display = hide ? "block" : "none";
-    mask.style.height = S.cfg.maskH + "%";
   }
   function start(i, round) {
     if (!video() || !S.blocks[i]) return;
@@ -355,6 +327,7 @@
   setInterval(() => {
     const v = video();
     if (!S.on || !S.active || !v) return;
+    placeBars();
     const seg = segment();
     if (!seg) return;
     const bar = $(".yr-blk.yr-on .yr-prog");
@@ -383,7 +356,7 @@
   function saveCfg() { store.set("cfg", S.cfg); }
 
   // ---------- Gemini prompt ----------
-  // The study language and the user's own language are inserted; instructions come in English or Japanese.
+  // The study language and the feedback language are inserted; the instructions are English or Japanese.
   const PROMPTS = {
     en: (p) => `You are my ${p.target} listening-comprehension and conversation coach. I will give you a video link and/or subtitles in ${p.target}. Your job is to help me break the video down and quiz me hard on the content, until I can listen to it and understand everything without subtitles.
 
@@ -394,6 +367,11 @@ Do the following when I send the material:
 1. **Analyse the material and split it into blocks:**
    - Read the transcript/subtitles and split the video into natural thematic blocks of about 3–5 minutes each (with exact timestamps and a short title in ${p.native}).
    - Briefly point out what makes this particular video hard to hear (e.g. fast spoken-language sentences, specialised vocabulary, dialect, or OCR/ASR errors in the subtitles).
+   - Give the block list as ONE code block, exactly one block per line in this format, with nothing else inside the code block (no header row, no numbering, no bold):
+     \`\`\`
+     h:mm:ss - h:mm:ss | Short title in ${p.native}
+     \`\`\`
+     Example line: \`0:00:16 - 0:04:29 | Morning meeting\`
 
 2. **Start the quiz for Block 1 (entirely in ${p.target}):**
    - Ask 4 questions in natural, everyday ${p.target} that matches the tone of the video (casual or polite, no stiff textbook language):
@@ -416,6 +394,11 @@ ${p.tail}`,
 1. **資料を分析してブロックに分ける：**
    - 書き起こし／字幕を読み、動画を3〜5分ほどの自然なテーマ別ブロックに分けてください（正確なタイムスタンプと、${p.native}の短い見出しを付けてください）。
    - この動画が聞き取りにくい理由を簡潔に挙げてください（例：速い話し言葉の文、専門用語、方言、字幕のOCR／音声認識の誤りなど）。
+   - ブロック一覧は**1つのコードブロック**にまとめ、1行に1ブロックで、次の形式にしてください。コードブロックの中には他のもの（見出し行、番号、太字など）を入れないでください：
+     \`\`\`
+     h:mm:ss - h:mm:ss | ${p.native}の短い見出し
+     \`\`\`
+     例：\`0:00:16 - 0:04:29 | 朝の集合\`
 
 2. **ブロック1のクイズを始める（すべて${p.target}で）：**
    - 動画のトーンに合わせて、自然な日常の${p.target}（くだけた表現または丁寧な表現）で4つ質問してください。教科書のような硬い表現は避けてください。
@@ -434,7 +417,8 @@ ${p.tail}`,
     en: { link: "Here is the video I want to work on now:", subs: "Here are the full subtitles I want to work on now" },
     ja: { link: "これから取り組む動画はこちらです：", subs: "これから取り組む動画の字幕全文はこちらです" },
   };
-  async function copyPrompt(pl) {
+  async function copyPrompt() {
+    const pl = S.cfg.promptIn === "ja" ? "ja" : "en";
     const { target, native } = S.cfg.langs;
     let tail;
     if (SITE === "netflix") {
@@ -450,36 +434,35 @@ ${p.tail}`,
       const ta = el("textarea", { value: text, style: "position:fixed;opacity:0" });
       document.body.append(ta); ta.select(); document.execCommand("copy"); ta.remove();
     }
-    S.msg = SITE === "netflix" ? T("subsCopiedHint") : T("copied");
+    S.msg = SITE === "netflix" ? T("subsCopied") : T("copied");
     render();
   }
 
   // ---------- UI ----------
   let panel, tab;
-  const uiHost = () => {
-    const f = document.fullscreenElement;
-    return f && f.tagName !== "VIDEO" ? f : document.body;
-  };
   addEventListener("fullscreenchange", () => {
     const h = uiHost();
     if (panel) h.append(panel);
     if (tab) h.append(tab);
+    if (SITE === "netflix") ensureBars();
   });
 
   function buildTab() {
     tab?.remove();
-    tab = el("button", { id: "yr-tab", onclick: () => { S.on = true; saveVid(); mount(); } });
+    tab = el("button", { id: "yr-tab", textContent: T("tab"), onclick: () => {
+      if (!S.cfg.onboarded) { chrome.runtime.sendMessage({ type: "openOptions" }); return; }
+      S.on = true; saveVid(); mount();
+    } });
     uiHost().append(tab);
   }
 
   function mount() {
     panel?.remove(); panel = null;
-    if (!S.on) { buildTab(); tab.textContent = T("tab"); applyView(); return; }
+    if (!S.on) { buildTab(); applyView(); return; }
     tab?.remove(); tab = null;
     panel = el("div", { id: "yr-panel" });
     uiHost().append(panel);
     render();
-    ensureMask();
     applyView();
   }
 
@@ -493,29 +476,9 @@ ${p.tail}`,
     };
   }
 
-  const numInput = (val, min, max, step, on) => {
-    const i = el("input", { type: "number", min, max, step, value: val });
-    i.onclick = (e) => e.stopPropagation();
-    i.onchange = () => on(Number(i.value));
-    return i;
-  };
-  const langInput = (key) => {
-    const i = el("input", { type: "text", value: S.cfg.langs[key], style: "width:120px" });
-    i.setAttribute("list", "yr-langs");
-    i.onchange = () => {
-      S.cfg.langs[key] = i.value.trim() || DEFAULT_CFG.langs[key];
-      saveCfg();
-      if (key === "target") S.trackSel = autoTrack();
-      render();
-    };
-    return i;
-  };
-
   function render() {
     if (!panel) return;
     const keepMin = panel.classList.contains("yr-min");
-    const openDetails = [...panel.querySelectorAll("details")].map((d) => d.open);
-    const editVal = $("#yr-text", panel)?.value;
     const pos = { l: panel.style.left, t: panel.style.top, r: panel.style.right };
     panel.replaceChildren();
     panel.className = keepMin ? "yr-min" : "";
@@ -523,10 +486,8 @@ ${p.tail}`,
 
     const head = el("div", { className: "yr-head" },
       el("b", { textContent: T("title") }),
-      el("button", { textContent: T("gemini"), title: T("geminiTip"), onclick: () =>
+      el("button", { className: "yr-ic", textContent: "✦", title: T("gemini") + ": " + T("geminiTip"), onclick: () =>
         chrome.runtime.sendMessage({ type: "gemini", availW: screen.availWidth, availH: screen.availHeight }) }),
-      el("button", { className: "yr-ic", textContent: lang === "ja" ? "EN" : "日本語", title: T("lang"), onclick: () => {
-        lang = lang === "ja" ? "en" : "ja"; S.cfg.lang = lang; saveCfg(); render(); } }),
       el("button", { className: "yr-ic", textContent: "–", title: T("min"), onclick: () => panel.classList.toggle("yr-min") }),
       el("button", { className: "yr-ic", textContent: "✕", title: T("off"), onclick: () => { S.on = false; S.active = false; saveVid(); pauseV(); applyView(); mount(); } }),
     );
@@ -537,13 +498,10 @@ ${p.tail}`,
     // Rounds
     const rounds = el("div", { className: "yr-rounds" });
     for (const r of [1, 2, 3, 4]) {
-      const sp = el("span", { className: "yr-sp" });
-      if (r === 3) sp.textContent = `${S.cfg.r3.from}→${S.cfg.r3.to}x`;
-      else sp.append(numInput(S.cfg.speed[r], 0.25, 2, 0.05, (v) => {
-        S.cfg.speed[r] = v || 1; saveCfg(); if (S.active && S.round === r) video().playbackRate = rateFor(); }), "x");
+      const sp = r === 3 ? `${S.cfg.r3.from}→${S.cfg.r3.to}x` : `${S.cfg.speed[r]}x`;
       rounds.append(el("div", { className: "yr-r" + (S.round === r ? " yr-on" : ""),
         onclick: () => { S.round = r; S.cur >= 0 ? start(S.cur, r) : render(); } },
-        el("b", { textContent: T("r" + r) }), sp));
+        el("b", { textContent: T("r" + r) }), el("span", { className: "yr-sp", textContent: sp })));
     }
     body.append(rounds);
 
@@ -558,23 +516,6 @@ ${p.tail}`,
         onclick: () => { S.cfg.loop = !S.cfg.loop; saveCfg(); render(); } }),
     ));
 
-    // Gemini prompt (+ subtitles on Netflix)
-    body.append(el("div", { className: "yr-row" },
-      el("button", { textContent: "📋 " + T("copyPrompt") + " EN", onclick: () => copyPrompt("en") }),
-      el("button", { textContent: "📋 日本語", onclick: () => copyPrompt("ja") })));
-    if (SITE === "netflix") {
-      const tracks = [...S.tracks.values()];
-      const row = el("div", { className: "yr-row" });
-      if (!tracks.length) row.append(el("div", { className: "yr-hint", textContent: T("noSubs") }));
-      else {
-        const sel = el("select", { className: "yr-grow", onchange: () => { S.trackSel = sel.value; render(); } });
-        tracks.forEach((t) => sel.append(el("option", { value: t.url, selected: t.url === S.trackSel, textContent: T("track", t.lang, t.cues.length) })));
-        row.append(el("span", { className: "yr-sec", textContent: T("subs") }), sel,
-          el("button", { textContent: "⬇ " + T("dlSrt"), onclick: downloadSrt }));
-      }
-      body.append(row);
-    }
-
     // Status
     const b = S.blocks[S.cur];
     let st = S.msg;
@@ -587,7 +528,6 @@ ${p.tail}`,
     body.append(el("div", { className: "yr-status", textContent: st }));
 
     // Blocks
-    body.append(el("div", { className: "yr-sec", textContent: T("blocks") }));
     const bl = el("div", { className: "yr-list" });
     S.blocks.forEach((blk, i) => bl.append(el("button", { className: "yr-blk" + (i === S.cur ? " yr-on" : ""), onclick: () => start(i) },
       el("span", { textContent: blk.label || `${T("blocks")} ${i + 1}` }),
@@ -596,50 +536,32 @@ ${p.tail}`,
     if (!S.blocks.length) bl.append(el("div", { className: "yr-hint", textContent: T("noBlocks") }));
     body.append(bl);
 
-    // Clips
-    body.append(el("div", { className: "yr-sec", textContent: T("clips") }));
-    const cl = el("div", { className: "yr-list" });
+    // Clips (round 3 only, or when some exist)
     const cs = S.clips[S.cur] || [];
-    cs.forEach((c, i) => cl.append(el("div", { className: "yr-clip" },
-      el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
-        onclick: () => { S.round = 3; S.clip = i; S.pass = 0; S.active = true; seekPlay(); setCC(ROUND_CC[3]); render(); } }),
-      el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; saveVid(); render(); } }))));
-    if (!cs.length) cl.append(el("div", { className: "yr-hint", textContent: T("noClips") }));
-    body.append(cl,
-      el("div", { className: "yr-row" }, el("button", { textContent: "＋ " + T("markClip") + " (Alt+M)", onclick: markClip })),
-      el("div", { className: "yr-hint", textContent: T("markHint") }));
+    if (S.round === 3 || cs.length) {
+      body.append(el("div", { className: "yr-sec", textContent: T("clips") }));
+      const cl = el("div", { className: "yr-list" });
+      cs.forEach((c, i) => cl.append(el("div", { className: "yr-clip" },
+        el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
+          onclick: () => { S.round = 3; S.clip = i; S.pass = 0; S.active = true; seekPlay(); setCC(ROUND_CC[3]); render(); } }),
+        el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; saveVid(); render(); } }))));
+      if (!cs.length) cl.append(el("div", { className: "yr-hint", textContent: T("noClips") }));
+      body.append(cl, el("button", { textContent: "＋ " + T("markClip"), title: "Alt+M", onclick: markClip }),
+        el("div", { className: "yr-hint", textContent: T("markHint") }));
+    }
 
-    // Settings
-    const d = el("details", {});
-    d.append(el("summary", { textContent: "⚙ " + T("settings") }));
-    const dl = el("datalist", { id: "yr-langs" });
-    LANGS.forEach(([, n]) => dl.append(el("option", { value: n })));
-    d.append(
-      dl,
-      el("div", { className: "yr-sec", textContent: T("langs") }),
-      el("div", { className: "yr-row" }, T("target"), langInput("target")),
-      el("div", { className: "yr-row" }, T("native"), langInput("native")),
-      el("div", { className: "yr-sec", textContent: T("r3cfg") }),
-      el("div", { className: "yr-row" },
-        T("from"), numInput(S.cfg.r3.from, 0.25, 2, 0.05, (v) => { S.cfg.r3.from = v; saveCfg(); render(); }),
-        T("to"), numInput(S.cfg.r3.to, 0.25, 2, 0.05, (v) => { S.cfg.r3.to = v; saveCfg(); render(); }),
-        T("passes"), numInput(S.cfg.r3.passes, 1, 10, 1, (v) => { S.cfg.r3.passes = Math.max(1, v | 0); saveCfg(); render(); })),
-      el("div", { className: "yr-sec", textContent: T("mask") }),
-      el("div", { className: "yr-row" }, numInput(S.cfg.maskH, 0, 60, 2, (v) => { S.cfg.maskH = v; saveCfg(); applyView(); }), T("maskUnit")),
-      el("div", { className: "yr-sec", textContent: T("edit") }),
-      el("div", { className: "yr-hint", textContent: T("format") }),
-    );
-    const ta = el("textarea", { id: "yr-text", value: editVal ?? S.text });
-    d.append(ta, el("div", { className: "yr-row" },
-      el("button", { textContent: T("save"), onclick: () => {
-        S.text = ta.value; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false; saveVid(); render(); } }),
-      SITE === "youtube" ? el("button", { textContent: T("fromDesc"), onclick: () => {
-        const txt = $("ytd-watch-metadata #description-inline-expander, #description")?.innerText || "";
-        const lines = txt.split("\n").filter((l) => /^\d+(:\d+){1,2}\s+\S/.test(l.trim()));
-        if (!lines.length) { S.msg = T("noChapters"); return render(); }
-        ta.value = lines.join("\n"); } }) : ""));
-    d.open = !!openDetails[0] || !S.blocks.length;
-    body.append(d, el("div", { className: "yr-hint", textContent: T("keys") }));
+    // Gemini prompt (+ subtitles on Netflix)
+    const foot = el("div", { className: "yr-row" }, el("button", { className: "yr-grow", textContent: "📋 " + T("copyPrompt"), onclick: copyPrompt }));
+    body.append(foot);
+    if (SITE === "netflix") {
+      const tracks = [...S.tracks.values()];
+      if (!tracks.length) body.append(el("div", { className: "yr-hint", textContent: T("noSubs") }));
+      else {
+        const sel = el("select", { className: "yr-grow", title: T("subs"), onchange: () => { S.trackSel = sel.value; render(); } });
+        tracks.forEach((t) => sel.append(el("option", { value: t.url, selected: t.url === S.trackSel, textContent: T("track", t.lang || "?", t.cues.length) })));
+        body.append(el("div", { className: "yr-row" }, sel, el("button", { textContent: "⬇ .srt", title: T("dlSrt"), onclick: downloadSrt })));
+      }
+    }
 
     panel.append(head, body);
   }
@@ -656,13 +578,28 @@ ${p.tail}`,
     else if (k.toLowerCase() === "m") { e.preventDefault(); markClip(); }
   }, true);
 
+  // ---------- Talking to the toolbar popup ----------
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg?.type === "info") reply({ site: SITE, vid: S.vid, on: S.on, text: S.text });
+    else if (msg?.type === "chapters") {
+      const txt = $("ytd-watch-metadata #description-inline-expander, #description")?.innerText || "";
+      reply({ lines: txt.split("\n").map((l) => l.trim()).filter((l) => /^\d+(:\d+){1,2}\s+\S/.test(l)) });
+    }
+  });
+  chrome.storage.onChanged.addListener((ch, area) => {
+    if (area !== "local") return;
+    if (ch.cfg) { applyCfg(ch.cfg.newValue); if (tab) tab.textContent = T("tab"); render(); applyView(); }
+    const rec = S.vid && ch[SITE + ":" + S.vid];
+    if (rec) {
+      const v = rec.newValue || {};
+      if (typeof v.text === "string" && v.text !== S.text) {
+        S.text = v.text; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false;
+      }
+      if (!!v.on !== S.on) { S.on = !!v.on; mount(); } else render();
+    }
+  });
+
   // ---------- Per-video init (both sites are SPAs) ----------
-  function ensureMask() {
-    if (SITE !== "youtube") return;
-    const player = $("#movie_player");
-    if (!player || $("#yr-mask")) return;
-    player.append(el("div", { id: "yr-mask" }));
-  }
   async function init() {
     const id = vidId();
     if (!id) {
@@ -670,9 +607,7 @@ ${p.tail}`,
     }
     if (id === S.vid) return;
     S.vid = id; S.cur = -1; S.active = false; S.markStart = null; S.msg = null; S.tracks = new Map(); S.trackSel = null;
-    const cfg = await store.get("cfg");
-    if (cfg) S.cfg = { ...DEFAULT_CFG, ...cfg, speed: { ...DEFAULT_CFG.speed, ...cfg.speed }, r3: { ...DEFAULT_CFG.r3, ...cfg.r3 }, langs: { ...DEFAULT_CFG.langs, ...cfg.langs } };
-    if (S.cfg.lang) lang = S.cfg.lang;
+    applyCfg(await store.get("cfg"));
     // YouTube records used the key "vid:<id>" in 0.2.x; keep reading them.
     const saved = (await store.get(SITE + ":" + id)) || (SITE === "youtube" ? await store.get("vid:" + id) : null);
     S.on = !!saved?.on;
