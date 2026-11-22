@@ -3,7 +3,7 @@
   const { LANGS, UI_LANGS, mergeCfg, makeT } = YR;
   const isTab = location.pathname.endsWith("options.html");
   const app = document.getElementById("app");
-  let cfg, T, info = null, flash = "";
+  let cfg, T, info = null, flash = "", recent = [];
 
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
@@ -98,6 +98,9 @@
       app.append(el("p", { textContent: T("noVideo") }));
     }
 
+    // Recent videos
+    app.append(recentBlock());
+
     // How the rounds work
     app.append(helpBlock());
 
@@ -155,6 +158,21 @@
     );
   }
 
+  // The last 10 videos where the panel was used; a click opens the video in a new tab.
+  function recentBlock() {
+    const wrap = el("div", { className: "recent" }, el("h2", { textContent: T("recentT") }));
+    if (!recent.length) wrap.append(el("p", { className: "hint", textContent: T("recentEmpty") }));
+    for (const e of recent) {
+      const url = e.site === "netflix" ? `https://www.netflix.com/watch/${encodeURIComponent(e.id)}` : `https://www.youtube.com/watch?v=${encodeURIComponent(e.id)}`;
+      wrap.append(el("button", { className: "recentrow", title: e.title || "", onclick: () => chrome.tabs.create({ url }) },
+        el("span", { className: "badge", textContent: e.site === "netflix" ? "N" : "▶" }),
+        el("span", { className: "rt", textContent: e.title || `${e.site} ${e.id}` })));
+    }
+    if (recent.length) wrap.append(el("div", { className: "row" }, el("button", { textContent: T("recentClear"), onclick: async () => {
+      recent = []; await chrome.storage.local.set({ history: [] }); render(); } })));
+    return wrap;
+  }
+
   // What / why / how for each round (English, 日本語 and Svenska have full texts; other languages show English).
   function helpBlock() {
     const wrap = el("div", { className: "help" }, el("h2", { textContent: T("helpTitle") }), el("p", { textContent: T("helpIntro") }));
@@ -175,7 +193,7 @@
       if (/^(youtube|netflix):/.test(k)) videos[k] = { text: v.text || "", clips: v.clips || {} };
       else if (k.startsWith("vid:") && !videos["youtube:" + k.slice(4)]) videos["youtube:" + k.slice(4)] = { text: v.text || "", clips: v.clips || {} };
     }
-    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos }, null, 1)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos, history: Array.isArray(all.history) ? all.history : [] }, null, 1)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: "rounds-backup.json" });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -192,6 +210,14 @@
         const old = existing[key] || {};
         patch[key] = { on: old.on ?? !!rec.text, text: rec.text || "", clips: rec.clips || {} };
       }
+      if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10; entries without "site" came from the mobile app (YouTube)
+        const seen = new Set();
+        const mine = Array.isArray(existing.history) ? existing.history : [];
+        const incoming = d.history.filter((e) => e && e.id).map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
+        patch.history = [...incoming, ...mine].sort((a, b) => (b.ts || 0) - (a.ts || 0))
+          .filter((e) => { const k = e.site + ":" + e.id; return !seen.has(k) && seen.add(k); }).slice(0, 10);
+        recent = patch.history;
+      }
       if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); patch.cfg = cfg; T = makeT(cfg.uiLang); }
       await chrome.storage.local.set(patch);
       return T("imported", Object.keys(d.videos).length);
@@ -199,8 +225,9 @@
   }
 
   (async () => {
-    const o = await chrome.storage.local.get("cfg");
+    const o = await chrome.storage.local.get(["cfg", "history"]);
     cfg = mergeCfg(o.cfg);
+    recent = Array.isArray(o.history) ? o.history : [];
     T = makeT(cfg.uiLang);
     if (!cfg.onboarded && !isTab) { chrome.runtime.openOptionsPage(); window.close(); return; }
     info = await getInfo();

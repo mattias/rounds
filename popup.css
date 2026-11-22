@@ -26,3 +26,7 @@ summary{cursor:pointer;font-weight:600}
 details[open] summary{margin-bottom:6px}
 details p{margin:0 0 6px;color:var(--fg)}
 details p b{color:var(--acc)}
+.recent{display:flex;flex-direction:column;gap:4px}
+.recentrow{display:flex;gap:8px;align-items:center;text-align:left;width:100%;padding:5px 10px}
+.recentrow .badge{flex:none;width:20px;text-align:center;color:var(--acc);font-weight:700}
+.recentrow .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

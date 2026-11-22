@@ -15,6 +15,7 @@
       exportB: "Export", importB: "Import", exportHint: "Save your blocks, clips and settings as a file, or load a file from another device.",
       imported: "Imported {0} video(s).", importBad: "Not a Rounds backup file.", exported: "Backup saved.",
       noEmbed: "This video cannot be played here (embedding is disabled).", rate: "Playing at {0}x on this device.",
+      playerT: "Player", histT: "History", histEmpty: "Videos you open show up here (the last 10).", histClear: "Clear history", histRemove: "Remove", histBlocks: "{0} blocks",
     },
     ja: {
       tagline: "YouTube用リスニング・ラウンド",
@@ -26,6 +27,7 @@
       exportB: "エクスポート", importB: "インポート", exportHint: "ブロック・クリップ・設定をファイルに保存、または別の端末のファイルを読み込みます。",
       imported: "{0}件の動画を読み込みました。", importBad: "Roundsのバックアップファイルではありません。", exported: "バックアップを保存しました。",
       noEmbed: "この動画はここでは再生できません（埋め込みが無効）。", rate: "この端末では{0}倍速で再生されています。",
+      playerT: "プレーヤー", histT: "履歴", histEmpty: "開いた動画がここに表示されます（最新10件）。", histClear: "履歴を消去", histRemove: "削除", histBlocks: "{0}ブロック",
     },
     sv: {
       tagline: "Lyssningsrundor för YouTube",
@@ -37,6 +39,7 @@
       exportB: "Exportera", importB: "Importera", exportHint: "Spara dina block, klipp och inställningar som en fil, eller läs in en fil från en annan enhet.",
       imported: "Importerade {0} video(r).", importBad: "Inte en Rounds-säkerhetskopia.", exported: "Säkerhetskopian sparad.",
       noEmbed: "Videon kan inte spelas här (inbäddning är avstängd).", rate: "Spelas i {0}x på den här enheten.",
+      playerT: "Spelare", histT: "Historik", histEmpty: "Videor du öppnar visas här (de senaste 10).", histClear: "Rensa historiken", histRemove: "Ta bort", histBlocks: "{0} block",
     },
   };
 
@@ -91,8 +94,8 @@
       videoId: id,
       playerVars: { playsinline: 1, rel: 0, modestbranding: 1, enablejsapi: 1, origin: location.origin },
       events: {
-        onReady: () => { S.ready = true; updateDur(); render(); },
-        onStateChange: (e) => { if (e.data === 1 || e.data === 5) updateDur(); },
+        onReady: () => { S.ready = true; updateDur(); noteTitle(); render(); },
+        onStateChange: (e) => { if (e.data === 1 || e.data === 5) { updateDur(); noteTitle(); } },
         onError: () => { S.noEmbed = true; render(); },
       },
     });
@@ -105,7 +108,47 @@
       render();
     }
   }
+  // ---------- History (the last 10 videos) ----------
+  const HIST_KEY = "rounds:history", HIST_MAX = 10;
+  let view = "player"; // "player" | "history"
+  const getHist = () => (Array.isArray(getJ(HIST_KEY)) ? getJ(HIST_KEY) : []);
+  function touchHist(id) {
+    const all = getHist(), old = all.find((e) => e.id === id);
+    setJ(HIST_KEY, [{ id, title: old?.title || "", ts: Date.now() }, ...all.filter((e) => e.id !== id)].slice(0, HIST_MAX));
+  }
+  function noteTitle() {
+    const vd = yt && yt.getVideoData && yt.getVideoData();
+    if (!vd || !vd.title || vd.video_id !== S.vid) return;
+    const all = getHist(), e = all.find((x) => x.id === S.vid);
+    if (e && e.title !== vd.title) { e.title = vd.title; setJ(HIST_KEY, all); }
+  }
+  function setView(v) {
+    if (v === view) return;
+    if (v === "history" && yt && isPlaying()) { yt.pauseVideo(); S.active = false; }
+    view = v;
+    render();
+  }
+  function historyView() {
+    const all = getHist(), wrap = el("div", { className: "list" });
+    if (!all.length) wrap.append(el("p", { className: "hint", textContent: A("histEmpty") }));
+    for (const e of all) {
+      const rec = getJ(VID_PREFIX + e.id);
+      const n = rec && rec.text ? parseBlocks(rec.text).length : 0;
+      wrap.append(el("div", { className: "hist" },
+        el("button", { className: "histbtn", onclick: () => loadVideo(e.id) },
+          el("img", { src: `https://i.ytimg.com/vi/${e.id}/mqdefault.jpg`, alt: "", loading: "lazy" }),
+          el("span", { className: "histtxt" }, el("b", { textContent: e.title || e.id }),
+            el("small", { textContent: `${new Date(e.ts).toLocaleDateString(cfg.uiLang)} · ${A("histBlocks", n)}` }))),
+        el("button", { textContent: "✕", title: A("histRemove"), onclick: () => { setJ(HIST_KEY, getHist().filter((x) => x.id !== e.id)); render(); } })));
+    }
+    if (all.length) wrap.append(el("button", { textContent: A("histClear"), onclick: () => { setJ(HIST_KEY, []); render(); } }));
+    return wrap;
+  }
+
   function loadVideo(id) {
+    touchHist(id);
+    if (id === S.vid && yt && S.ready) { view = "player"; render(); return; }
+    view = "player";
     S.vid = id; S.cur = -1; S.active = false; S.msg = null; S.noEmbed = false; S.ready = false; S.dur = 0; self.__dur = 0;
     const rec = getJ(VID_PREFIX + id);
     S.text = rec?.text || ""; S.clips = rec?.clips || {};
@@ -220,7 +263,7 @@
       const k = LS.key(i);
       if (k.startsWith(VID_PREFIX)) videos[k.slice(VID_PREFIX.length)] = getJ(k);
     }
-    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos }, null, 1)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ app: "rounds", version: 1, cfg, videos, history: getHist() }, null, 1)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: "rounds-backup.json" });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
@@ -238,6 +281,12 @@
         const id = k.replace(/^youtube:/, "");
         imported[id] = { text: rec.text || "", clips: rec.clips || {} };
         setJ(VID_PREFIX + id, imported[id]); n++;
+      }
+      if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10
+        const seen = new Set();
+        const merged = [...d.history.filter((e) => e && e.id && e.site !== "netflix"), ...getHist()]
+          .sort((a, b) => (b.ts || 0) - (a.ts || 0)).filter((e) => !seen.has(e.id) && seen.add(e.id));
+        setJ(HIST_KEY, merged.slice(0, HIST_MAX));
       }
       if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); T = makeT(cfg.uiLang); saveCfg(); }
       if (S.vid && imported[S.vid]) { S.text = imported[S.vid].text; S.clips = imported[S.vid].clips; S.blocks = parseBlocks(S.text); }
@@ -296,6 +345,18 @@
         el("h2", { textContent: T("welcomeTitle") }), el("p", { textContent: A("welcomeText") }),
         row(T("uiLang"), uiPicker()), row(T("learning"), ...langPicker("target")), row(T("feedback"), ...langPicker("native")),
         el("button", { className: "primary", textContent: T("start"), onclick: () => { cfg.onboarded = true; saveCfg(); render(); } })));
+      return;
+    }
+
+    // Tabs: player / history
+    const tabs = $("#tabs");
+    tabs.replaceChildren(
+      el("button", { className: view === "player" ? "on" : "", textContent: "▶ " + A("playerT"), onclick: () => setView("player") }),
+      el("button", { className: view === "history" ? "on" : "", textContent: "🕘 " + A("histT"), onclick: () => setView("history") }));
+    tabs.style.display = "flex";
+    if (view === "history") {
+      $("#player-wrap").style.display = "none";
+      root.append(historyView());
       return;
     }
 

@@ -355,6 +355,29 @@
   }
   function saveCfg() { store.set("cfg", S.cfg); }
 
+  // ---------- Recent videos (listed in the toolbar popup) ----------
+  // Only videos where the panel is switched on; the last 10, newest first.
+  const HIST_MAX = 10;
+  function pageTitle() {
+    if (SITE === "netflix") return videoTitle();
+    return (document.title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*-\s*YouTube\s*$/i, "").trim();
+  }
+  async function touchHistory() {
+    if (!S.vid || !S.on) return;
+    const o = await new Promise((r) => chrome.storage.local.get("history", r));
+    const all = Array.isArray(o.history) ? o.history : [];
+    const old = all.find((e) => e.site === SITE && e.id === S.vid);
+    let title = pageTitle();
+    if (!title || /^netflix$/i.test(title)) title = old?.title || ""; // Netflix often shows only its name
+    const next = [{ site: SITE, id: S.vid, title, ts: Date.now() }, ...all.filter((e) => !(e.site === SITE && e.id === S.vid))].slice(0, HIST_MAX);
+    chrome.storage.local.set({ history: next });
+  }
+  function rememberVideo() {
+    const id = S.vid;
+    touchHistory();
+    for (const ms of [3000, 9000]) setTimeout(() => { if (S.vid === id) touchHistory(); }, ms); // the title may arrive late
+  }
+
   // ---------- Gemini prompt ----------
   // The study language and the feedback language are inserted; the instructions are English or Japanese.
   const PROMPTS = {
@@ -466,6 +489,7 @@ ${p.tail}`,
     uiHost().append(panel);
     render();
     applyView();
+    rememberVideo();
   }
 
   function dragify(panelEl, handle) {
