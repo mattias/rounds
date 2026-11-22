@@ -243,7 +243,7 @@
     if (SITE !== "netflix") return;
     const v = video();
     if (!v) return;
-    const r = v.getBoundingClientRect(), b = S.cfg.bars.netflix;
+    const r = v.getBoundingClientRect(), b = S.cfg.bars;
     const top = $("#yr-bar-top"), bot = $("#yr-bar-bottom");
     if (top) Object.assign(top.style, { left: r.left + "px", width: r.width + "px", top: r.top + "px", height: (r.height * b.top) / 100 + "px" });
     if (bot) {
@@ -255,7 +255,7 @@
     const cover = S.on && S.active && ROUND_COVER[S.round];
     document.documentElement.toggleAttribute("data-yr-hide-subs", SITE === "netflix" && !!cover);
     ensureBars();
-    const b = S.cfg.bars[SITE];
+    const b = S.cfg.bars;
     for (const pos of ["top", "bottom"]) {
       const bar = $("#yr-bar-" + pos);
       if (!bar) continue;
@@ -448,7 +448,9 @@ ${p.tail}`,
   });
 
   function buildTab() {
-    tab?.remove();
+    tab?.remove(); tab = null;
+    // The tab can be turned off in the toolbar popup; videos can still be switched on from there.
+    if (S.cfg.onboarded && !S.cfg.showTab) return;
     tab = el("button", { id: "yr-tab", textContent: T("tab"), onclick: () => {
       if (!S.cfg.onboarded) { chrome.runtime.sendMessage({ type: "openOptions" }); return; }
       S.on = true; saveVid(); mount();
@@ -588,7 +590,7 @@ ${p.tail}`,
   });
   chrome.storage.onChanged.addListener((ch, area) => {
     if (area !== "local") return;
-    if (ch.cfg) { applyCfg(ch.cfg.newValue); if (tab) tab.textContent = T("tab"); render(); applyView(); }
+    if (ch.cfg) { applyCfg(ch.cfg.newValue); if (S.vid && !S.on) buildTab(); render(); applyView(); }
     const rec = S.vid && ch[SITE + ":" + S.vid];
     if (rec) {
       const v = rec.newValue || {};

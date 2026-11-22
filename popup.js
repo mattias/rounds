@@ -124,13 +124,15 @@
     );
 
     // Cover bars
-    const bar = (site, pos) => num(cfg.bars[site][pos], 0, 60, 1, (v) => (cfg.bars[site][pos] = Math.min(60, Math.max(0, v || 0))));
+    const bar = (pos) => num(cfg.bars[pos], 0, 60, 1, (v) => (cfg.bars[pos] = Math.min(60, Math.max(0, v || 0))));
+    const tabBox = el("input", { type: "checkbox", checked: cfg.showTab !== false });
+    tabBox.onchange = () => { cfg.showTab = tabBox.checked; save(); };
     app.append(
       el("h2", { textContent: T("sBars") }),
-      el("table", {}, ...[["youtube", "barsYT"], ["netflix", "barsNF"]].map(([site, lbl]) =>
-        el("tr", {}, el("td", { textContent: T(lbl) }), el("td", { textContent: T("barTop") }), el("td", {}, bar(site, "top")),
-          el("td", { textContent: T("barBottom") }), el("td", {}, bar(site, "bottom"))))),
+      row(T("barTop"), bar("top")),
+      row(T("barBottom"), bar("bottom")),
       el("div", { className: "hint", textContent: T("barsHint") }),
+      el("label", { className: "row" }, tabBox, T("showTab")),
       el("div", { className: "hint", textContent: T("keys") }),
     );
   }
