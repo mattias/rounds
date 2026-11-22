@@ -20,3 +20,9 @@ button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
 .hint{color:var(--dim);font-size:11px}
 .ok{color:#7ddc8a}
 table{border-collapse:collapse}td{padding:3px 8px 3px 0}
+.help{display:flex;flex-direction:column;gap:6px}
+details{border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:6px}
+details p{margin:0 0 6px;color:var(--fg)}
+details p b{color:var(--acc)}

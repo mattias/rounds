@@ -98,6 +98,9 @@
       app.append(el("p", { textContent: T("noVideo") }));
     }
 
+    // How the rounds work
+    app.append(helpBlock());
+
     // Languages
     app.append(
       el("h2", { textContent: T("sLang") }),
@@ -150,6 +153,19 @@
         el("button", { textContent: "⬆ " + T("importB"), onclick: () => (isTab ? file.click() : chrome.runtime.openOptionsPage()) }),
         file, note),
     );
+  }
+
+  // What / why / how for each round (English, 日本語 and Svenska have full texts; other languages show English).
+  function helpBlock() {
+    const wrap = el("div", { className: "help" }, el("h2", { textContent: T("helpTitle") }), el("p", { textContent: T("helpIntro") }));
+    for (const r of [1, 2, 3, 4]) {
+      const d = el("details", {}, el("summary", { textContent: T("r" + r) }));
+      for (const [lbl, k] of [["lblWhat", "What"], ["lblWhy", "Why"], ["lblHow", "How"]]) {
+        d.append(el("p", {}, el("b", { textContent: T(lbl) + ": " }), T(`h${r}${k}`)));
+      }
+      wrap.append(d);
+    }
+    return wrap;
   }
 
   async function exportData() {

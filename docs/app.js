@@ -367,6 +367,17 @@
           S.text = ta.value; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false; saveVid(); S.msg = T("saved"); render(); } }), saved)));
     }
 
+    // How the rounds work (full texts in English, 日本語, Svenska; other languages show English)
+    const helpItems = [el("p", { className: "hint", textContent: T("helpIntro") })];
+    for (const r of [1, 2, 3, 4]) {
+      const d = el("details", {}, el("summary", { textContent: T("r" + r) }));
+      for (const [lbl, k] of [["lblWhat", "What"], ["lblWhy", "Why"], ["lblHow", "How"]]) {
+        d.append(el("p", {}, el("b", { textContent: T(lbl) + ": " }), T(`h${r}${k}`)));
+      }
+      helpItems.push(d);
+    }
+    root.append(section("help", T("helpTitle"), ...helpItems));
+
     // Settings
     root.append(section("settings", A("settingsT"),
       row(T("uiLang"), uiPicker()), row(T("learning"), ...langPicker("target")), row(T("feedback"), ...langPicker("native")),
