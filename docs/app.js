@@ -582,12 +582,20 @@
     const q = S.mode === "local" ? (x) => Math.round(x * 100) / 100 : (x) => Math.round(x * 20) / 20;
     if (S.round !== 3) return q(cfg.speed[S.round]);
     const { from, to, passes } = cfg.r3;
-    return q(passes <= 1 ? to : from + ((to - from) * S.pass) / (passes - 1));
+    // a clip looped on its own keeps going at the ramp's final speed
+    return q(passes <= 1 ? to : from + ((to - from) * Math.min(S.pass, passes - 1)) / (passes - 1));
   }
   function start(i, round) {
     if (!E.ok() || !S.blocks[i]) return;
     if (round) S.round = round;
-    S.cur = i; S.pass = 0; S.clip = 0; S.active = true; S.msg = null;
+    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.active = true; S.msg = null;
+    seekPlay();
+    render();
+  }
+  // Tap a clip: loop it (until you stop it). Tap it again: stop. Tap another clip while looping: switch to that one.
+  function tapClip(i) {
+    if (S.round === 3 && S.active && S.clip === i) return halt();
+    S.round = 3; S.clip = i; S.pass = 0; S.solo = true; S.active = true; S.markStart = null; S.msg = null;
     seekPlay();
     render();
   }
@@ -610,7 +618,7 @@
     if (S.round === 3) {
       const cs = S.clips[S.cur] || [];
       S.pass++;
-      if (S.pass >= cfg.r3.passes) {
+      if (!S.solo && S.pass >= cfg.r3.passes) {
         S.pass = 0;
         if (S.clip + 1 < cs.length) S.clip++;
         else if (cfg.loop) S.clip = 0;
@@ -634,15 +642,60 @@
 
 
   // ---------- Clips ----------
+  const blockAt = (t) => S.blocks.findIndex((b) => t >= b.s && t < b.e);
+  function addClip(s, e) {
+    (S.clips[S.cur] ||= []).push({ s, e });
+    S.clips[S.cur].sort((a, b) => a.s - b.s); // keep the clips in video order
+    saveVid();
+  }
+  // Marking stops the loop, so the video plays on and you can reach the end of the sentence (and the next sentences).
+  // No block needs to be picked first: the block is found from where you are.
+  // While a loop is running, the first press only stops it and plays on from the end of the clip,
+  // so the next press can mark the start of the next sentence (not a spot inside the looped one).
+  function releaseLoop() {
+    if (!(S.active && S.round === 3 && S.markStart == null)) return false;
+    const seg = segment();
+    S.active = false;
+    if (seg) { S.lock = Date.now() + 600; E.seek(seg.e); E.play(); }
+    S.msg = T("loopReleased");
+    render();
+    return true;
+  }
   function markClip() {
-    if (!E.ok() || S.cur < 0) { S.msg = T("pick"); return render(); }
+    if (!E.ok()) { S.msg = T("pick"); return render(); }
+    if (releaseLoop()) return;
     const t = E.time();
-    if (S.markStart == null) { S.markStart = t; S.msg = T("clipStart", fmt(t)); }
+    if (S.cur < 0) {
+      const i = blockAt(t);
+      if (i < 0) { S.msg = T("pick"); return render(); }
+      S.cur = i;
+    }
+    if (S.markStart == null) { S.markStart = t; S.active = false; S.msg = T("clipStart", fmt(t)); }
     else {
       const s = Math.min(S.markStart, t), e = Math.max(S.markStart, t);
       S.markStart = null; S.msg = null;
-      if (e - s > 0.5) { (S.clips[S.cur] ||= []).push({ s, e }); saveVid(); }
+      if (e - s > 0.5) { addClip(s, e); S.msg = T("clipAdded", S.clips[S.cur].length); }
     }
+    render();
+  }
+  // Local files with subtitles: the whole spoken line as a clip, in one press.
+  function clipLine() {
+    const tr = S.local && S.local.tracks[S.local.sel];
+    if (!E.ok() || !tr || !tr.cues.length) { S.msg = T("needSubs"); return render(); }
+    if (releaseLoop()) return;
+    const t = E.time();
+    if (S.cur < 0) {
+      const i = blockAt(t);
+      if (i < 0) { S.msg = T("pick"); return render(); }
+      S.cur = i;
+    }
+    let c = tr.cues.find((x) => t >= x.s && t < x.e);
+    if (!c) c = tr.cues.reduce((a, x) => (Math.abs(x.s - t) < Math.abs(a.s - t) ? x : a), tr.cues[0]);
+    const s = Math.max(0, c.s - 0.15), e = c.e + 0.15;
+    const list = (S.clips[S.cur] ||= []);
+    if (!list.some((x) => Math.abs(x.s - s) < 0.3 && Math.abs(x.e - e) < 0.3)) addClip(s, e);
+    S.active = false;
+    S.msg = T("clipAdded", S.clips[S.cur].length);
     render();
   }
 
@@ -810,7 +863,7 @@
       if (!st) {
         if (b && S.active) {
           st = T("status", S.cur + 1, S.round, rateFor().toFixed(2));
-          if (S.round === 3) st += T("status3", Math.min(S.clip + 1, Math.max(1, (S.clips[S.cur] || []).length)), S.pass + 1, cfg.r3.passes);
+          if (S.round === 3) st += T("status3", Math.min(S.clip + 1, Math.max(1, (S.clips[S.cur] || []).length)), Math.min(S.pass + 1, cfg.r3.passes), cfg.r3.passes);
         } else st = b ? T("stopped") : T("pick");
       }
       root.append(el("div", { className: "status", textContent: st }));
@@ -829,10 +882,12 @@
         const cl = el("div", { className: "list" }, el("h3", { textContent: T("clips") }));
         cs.forEach((c, i) => cl.append(el("div", { className: "clip" },
           el("button", { className: S.round === 3 && S.active && i === S.clip ? "on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
-            onclick: () => { S.round = 3; S.clip = i; S.pass = 0; S.active = true; seekPlay(); render(); } }),
+            title: T("clipTap"), onclick: () => tapClip(i) }),
           el("button", { textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; saveVid(); render(); } }))));
         if (!cs.length) cl.append(el("p", { className: "hint", textContent: T("noClips") }));
-        cl.append(el("button", { textContent: "＋ " + T("markClip"), onclick: markClip }), el("p", { className: "hint", textContent: T("markHint") }));
+        cl.append(el("button", { textContent: "＋ " + T("markClip"), onclick: markClip }));
+        if (S.mode === "local" && S.local && S.local.tracks[S.local.sel]) cl.append(el("button", { textContent: "＋ " + T("clipLine"), onclick: clipLine }));
+        cl.append(el("p", { className: "hint", textContent: T("clipTap") }), el("p", { className: "hint", textContent: T("markHint") }));
         root.append(cl);
       }
 

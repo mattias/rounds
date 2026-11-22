@@ -278,7 +278,8 @@
   function rateFor() {
     if (S.round !== 3) return S.cfg.speed[S.round];
     const { from, to, passes } = S.cfg.r3;
-    return passes <= 1 ? to : from + ((to - from) * S.pass) / (passes - 1);
+    // a clip looped on its own keeps going at the ramp's final speed
+    return passes <= 1 ? to : from + ((to - from) * Math.min(S.pass, passes - 1)) / (passes - 1);
   }
   function setCC(want) {
     if (want == null || SITE !== "youtube") return;
@@ -289,9 +290,17 @@
   function start(i, round) {
     if (!video() || !S.blocks[i]) return;
     if (round) S.round = round;
-    S.cur = i; S.pass = 0; S.clip = 0; S.active = true; S.msg = null;
+    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.active = true; S.msg = null;
     seekPlay();
     setCC(ROUND_CC[S.round]);
+    render();
+  }
+  // Tap a clip: loop it (until you stop it). Tap it again: stop. Tap another clip while looping: switch to that one.
+  function tapClip(i) {
+    if (S.round === 3 && S.active && S.clip === i) return halt();
+    S.round = 3; S.clip = i; S.pass = 0; S.solo = true; S.active = true; S.markStart = null; S.msg = null;
+    seekPlay();
+    setCC(ROUND_CC[3]);
     render();
   }
   function seekPlay() {
@@ -313,7 +322,7 @@
     if (S.round === 3) {
       const cs = S.clips[S.cur] || [];
       S.pass++;
-      if (S.pass >= S.cfg.r3.passes) {
+      if (!S.solo && S.pass >= S.cfg.r3.passes) {
         S.pass = 0;
         if (S.clip + 1 < cs.length) S.clip++;
         else if (S.cfg.loop) S.clip = 0;
@@ -337,17 +346,64 @@
   }, 80);
 
   // ---------- Clips ----------
+  const blockAt = (t) => S.blocks.findIndex((b) => t >= b.s && t < b.e);
+  function addClip(s, e) {
+    (S.clips[S.cur] ||= []).push({ s, e });
+    S.clips[S.cur].sort((a, b) => a.s - b.s); // keep the clips in video order
+    saveVid();
+  }
+  // Marking stops the loop, so the video plays on and you can reach the end of the sentence (and the next sentences).
+  // No block needs to be picked first: the block is found from where you are.
+  // While a loop is running, the first press only stops it and plays on from the end of the clip,
+  // so the next press can mark the start of the next sentence (not a spot inside the looped one).
+  function releaseLoop() {
+    if (!(S.active && S.round === 3 && S.markStart == null)) return false;
+    const seg = segment();
+    S.active = false; applyView();
+    if (seg) { S.lock = Date.now() + 600; seekTo(seg.e); playV(); }
+    S.msg = T("loopReleased");
+    render();
+    return true;
+  }
   function markClip() {
     const v = video();
-    if (!v || S.cur < 0) { S.msg = T("pick"); return render(); }
+    if (!v) return;
+    if (releaseLoop()) return;
+    if (S.cur < 0) {
+      const i = blockAt(v.currentTime);
+      if (i < 0) { S.msg = T("pick"); return render(); }
+      S.cur = i;
+    }
     if (S.markStart == null) {
       S.markStart = v.currentTime;
+      S.active = false; applyView();
       S.msg = T("clipStart", fmt(S.markStart));
     } else {
       const s = Math.min(S.markStart, v.currentTime), e = Math.max(S.markStart, v.currentTime);
       S.markStart = null; S.msg = null;
-      if (e - s > 0.5) { (S.clips[S.cur] ||= []).push({ s, e }); saveVid(); }
+      if (e - s > 0.5) { addClip(s, e); S.msg = T("clipAdded", S.clips[S.cur].length); }
     }
+    render();
+  }
+  // With subtitles (Netflix): the whole spoken line as a clip, in one press.
+  function clipLine() {
+    const v = video(), tr = curTrack();
+    if (!v) return;
+    if (!tr) { S.msg = T("needSubs"); return render(); }
+    if (releaseLoop()) return;
+    if (S.cur < 0) {
+      const i = blockAt(v.currentTime);
+      if (i < 0) { S.msg = T("pick"); return render(); }
+      S.cur = i;
+    }
+    const t = v.currentTime;
+    let c = tr.cues.find((x) => t >= x.s && t < x.e);
+    if (!c) c = tr.cues.reduce((a, x) => (Math.abs(x.s - t) < Math.abs(a.s - t) ? x : a), tr.cues[0]);
+    const s = Math.max(0, c.s - 0.15), e = c.e + 0.15;
+    const list = (S.clips[S.cur] ||= []);
+    if (!list.some((x) => Math.abs(x.s - s) < 0.3 && Math.abs(x.e - e) < 0.3)) addClip(s, e);
+    S.active = false; applyView();
+    S.msg = T("clipAdded", S.clips[S.cur].length);
     render();
   }
   function saveVid() {
@@ -548,7 +604,7 @@ ${p.tail}`,
     if (!st) {
       if (b && S.active) {
         st = T("status", S.cur + 1, S.round, rateFor().toFixed(2));
-        if (S.round === 3) st += T("status3", Math.min(S.clip + 1, Math.max(1, (S.clips[S.cur] || []).length)), S.pass + 1, S.cfg.r3.passes);
+        if (S.round === 3) st += T("status3", Math.min(S.clip + 1, Math.max(1, (S.clips[S.cur] || []).length)), Math.min(S.pass + 1, S.cfg.r3.passes), S.cfg.r3.passes);
       } else st = b ? T("stopped") : T("pick");
     }
     body.append(el("div", { className: "yr-status", textContent: st }));
@@ -569,11 +625,12 @@ ${p.tail}`,
       const cl = el("div", { className: "yr-list" });
       cs.forEach((c, i) => cl.append(el("div", { className: "yr-clip" },
         el("button", { className: S.round === 3 && S.active && i === S.clip ? "yr-on" : "", textContent: `${i + 1}: ${fmt(c.s)}–${fmt(c.e)}`,
-          onclick: () => { S.round = 3; S.clip = i; S.pass = 0; S.active = true; seekPlay(); setCC(ROUND_CC[3]); render(); } }),
+          title: T("clipTap"), onclick: () => tapClip(i) }),
         el("button", { className: "yr-ic", textContent: "✕", onclick: () => { cs.splice(i, 1); S.clip = 0; saveVid(); render(); } }))));
       if (!cs.length) cl.append(el("div", { className: "yr-hint", textContent: T("noClips") }));
-      body.append(cl, el("button", { textContent: "＋ " + T("markClip"), title: "Alt+M", onclick: markClip }),
-        el("div", { className: "yr-hint", textContent: T("markHint") }));
+      body.append(cl, el("button", { textContent: "＋ " + T("markClip"), title: "Alt+M", onclick: markClip }));
+      if (SITE === "netflix" && curTrack()) body.append(el("button", { textContent: "＋ " + T("clipLine"), onclick: clipLine }));
+      body.append(el("div", { className: "yr-hint", textContent: T("clipTap") }), el("div", { className: "yr-hint", textContent: T("markHint") }));
     }
 
     // Gemini prompt (+ subtitles on Netflix)
