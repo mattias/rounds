@@ -1,3 +1,5 @@
+<p align="center"><img src="icons/icon128.png" width="96" alt="YT Rounds logo"></p>
+
 # YT Rounds · YTラウンド
 
 [English](#english) · [日本語](#日本語)
