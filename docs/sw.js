@@ -1,6 +1,6 @@
 // Offline shell for the app files; YouTube itself always goes to the network.
-const CACHE = "rounds-v2";
-const FILES = ["./", "index.html", "style.css", "shared.js", "core.js", "subs.js", "app.js", "manifest.webmanifest", "icons/icon128.png", "icons/icon192.png", "icons/icon512.png"];
+const CACHE = "rounds-v3";
+const FILES = ["./", "index.html", "style.css", "shared.js", "core.js", "subs.js", "embed.js", "app.js", "manifest.webmanifest", "icons/icon128.png", "icons/icon192.png", "icons/icon512.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));

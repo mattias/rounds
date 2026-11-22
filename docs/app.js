@@ -15,6 +15,9 @@
       exportB: "Export", importB: "Import", exportHint: "Save your blocks, clips and settings as a file, or load a file from another device.",
       imported: "Imported {0} video(s).", importBad: "Not a Rounds backup file.", exported: "Backup saved.",
       noEmbed: "This video cannot be played here (embedding is disabled).", rate: "Playing at {0}x on this device.",
+      embeddedT: "embedded",
+      scanning: "Reading embedded subtitles… {0}%",
+      subsNone: "No subtitles yet. Add an .srt, .vtt or .ass file. Text subtitles inside mkv/mp4 files are found automatically (picture-based ones are not supported).",
       barsLocalOnly: "Used for local files only (YouTube does not allow covering its player). Shown in rounds 1 and 4.",
       localT: "Local",
       pickFiles: "Choose video + subtitles",
@@ -22,7 +25,6 @@
       localHint: "Your own video or audio file, with .srt, .vtt or .ass subtitles. Plays in your browser: mp4 (H.264/AAC) works everywhere, mkv mostly in Chrome on a computer. Nothing is uploaded.",
       localErr: "The browser cannot play this file (format or codec). Converting it to mp4 (H.264/AAC) usually helps.",
       subsT: "Subtitles",
-      subsNone: "No subtitles yet. Add an .srt, .vtt or .ass file.",
       subsAdd: "Add subtitles / change files",
       encT: "Encoding",
       reopen: "Choose the same file again to continue ({0}).",
@@ -40,6 +42,9 @@
       exportB: "エクスポート", importB: "インポート", exportHint: "ブロック・クリップ・設定をファイルに保存、または別の端末のファイルを読み込みます。",
       imported: "{0}件の動画を読み込みました。", importBad: "Roundsのバックアップファイルではありません。", exported: "バックアップを保存しました。",
       noEmbed: "この動画はここでは再生できません（埋め込みが無効）。", rate: "この端末では{0}倍速で再生されています。",
+      embeddedT: "内蔵",
+      scanning: "内蔵字幕を読み込み中… {0}%",
+      subsNone: "字幕がありません。.srt / .vtt / .ass ファイルを追加してください。mkv/mp4内のテキスト字幕は自動で検出されます（画像形式の字幕は非対応）。",
       barsLocalOnly: "ローカルファイルのみで使用します（YouTubeはプレーヤーを覆うことを許可していません）。ラウンド1と4で表示されます。",
       localT: "ローカル",
       pickFiles: "動画と字幕を選ぶ",
@@ -47,7 +52,6 @@
       localHint: "お持ちの動画・音声ファイルと、.srt / .vtt / .ass の字幕を使えます。ブラウザ内で再生されます。mp4（H.264/AAC）はどこでも、mkvは主にパソコンのChromeで再生できます。何もアップロードされません。",
       localErr: "このファイルはブラウザで再生できません（形式またはコーデック）。mp4（H.264/AAC）に変換すると解決することが多いです。",
       subsT: "字幕",
-      subsNone: "字幕がありません。.srt / .vtt / .ass ファイルを追加してください。",
       subsAdd: "字幕を追加／ファイルを変更",
       encT: "文字コード",
       reopen: "続けるには同じファイルをもう一度選んでください（{0}）。",
@@ -65,6 +69,9 @@
       exportB: "Exportera", importB: "Importera", exportHint: "Spara dina block, klipp och inställningar som en fil, eller läs in en fil från en annan enhet.",
       imported: "Importerade {0} video(r).", importBad: "Inte en Rounds-säkerhetskopia.", exported: "Säkerhetskopian sparad.",
       noEmbed: "Videon kan inte spelas här (inbäddning är avstängd).", rate: "Spelas i {0}x på den här enheten.",
+      embeddedT: "inbyggd",
+      scanning: "Läser inbyggda undertexter… {0}%",
+      subsNone: "Inga undertexter än. Lägg till en .srt-, .vtt- eller .ass-fil. Textundertexter inuti mkv/mp4 hittas automatiskt (bildbaserade stöds inte).",
       barsLocalOnly: "Används bara för lokala filer (YouTube tillåter inte att man täcker spelaren). Visas i runda 1 och 4.",
       localT: "Lokal",
       pickFiles: "Välj video + undertexter",
@@ -72,7 +79,6 @@
       localHint: "Din egen video- eller ljudfil, med undertexter i .srt, .vtt eller .ass. Spelas i webbläsaren: mp4 (H.264/AAC) fungerar överallt, mkv mest i Chrome på dator. Inget laddas upp.",
       localErr: "Webbläsaren kan inte spela den här filen (format eller codec). Att konvertera till mp4 (H.264/AAC) hjälper oftast.",
       subsT: "Undertexter",
-      subsNone: "Inga undertexter än. Lägg till en .srt-, .vtt- eller .ass-fil.",
       subsAdd: "Lägg till undertexter / byt filer",
       encT: "Teckenkodning",
       reopen: "Välj samma fil igen för att fortsätta ({0}).",
@@ -267,6 +273,41 @@
     lv().load();
     view = "local";
     history.replaceState(null, "", location.pathname);
+    render();
+    scanEmbedded(file);
+  }
+
+  // Text subtitles inside mkv/mp4 files (read in the background, with progress)
+  const ISO3 = { ja: ["jpn"], en: ["eng"], sv: ["swe"], zh: ["chi", "zho"], yue: ["yue"], ko: ["kor"], es: ["spa"], fr: ["fre", "fra"], de: ["ger", "deu"], it: ["ita"], pt: ["por"], ru: ["rus"], ar: ["ara"], hi: ["hin"], nl: ["dut", "nld"], pl: ["pol"], tr: ["tur"], th: ["tha"], vi: ["vie"], id: ["ind"], fi: ["fin"], da: ["dan"], no: ["nor", "nob", "nno"], uk: ["ukr"] };
+  const langMatches = (tl, code) => {
+    if (!tl || !code) return false;
+    const l = String(tl).toLowerCase();
+    return l.split(/[-_]/)[0] === code || (ISO3[code] || []).includes(l.slice(0, 3));
+  };
+  async function scanEmbedded(file) {
+    if (!/\.(mkv|webm|mp4|m4v|mov)$/i.test(file.name)) return;
+    const L = S.local;
+    L.scan = 0;
+    let shown = -1, res = null;
+    try {
+      res = await Embed.extract(file, {
+        cancelled: () => states.local.local !== L,
+        onProgress: (p) => { L.scan = p; const step = Math.floor(p * 20); if (step !== shown && states.local.local === L) { shown = step; render(); } },
+      });
+    } catch { res = null; }
+    if (states.local.local !== L) return; // another file was loaded meanwhile
+    L.scan = null;
+    if (res) {
+      for (const t of res.tracks) {
+        L.tracks.push({ name: `${t.lang || "?"}${t.name ? " · " + t.name : ""} (${A("embeddedT")})`, buf: null, enc: "auto", cues: t.cues, lang: t.lang, embedded: true });
+      }
+      if (L.sel < 0 && L.tracks.length) { // prefer the study language, then the track with most lines
+        const want = langCode(), emb = L.tracks.filter((t) => t.embedded);
+        const pool = emb.filter((t) => langMatches(t.lang, want));
+        const best = (pool.length ? pool : emb).slice().sort((a, b) => b.cues.length - a.cues.length)[0];
+        L.sel = L.tracks.indexOf(best);
+      }
+    }
     render();
   }
   async function handleFiles(list) {
@@ -594,13 +635,15 @@
       if (S.mode === "local" && S.local) {
         const L = S.local, tr = L.tracks[L.sel];
         const box = el("div", { className: "list" }, el("h3", { textContent: A("subsT") }));
-        if (!L.tracks.length) box.append(el("p", { className: "hint", textContent: A("subsNone") }));
+        if (L.scan != null) box.append(el("p", { className: "hint", textContent: A("scanning", Math.round(L.scan * 100)) }));
+        if (!L.tracks.length) { if (L.scan == null) box.append(el("p", { className: "hint", textContent: A("subsNone") })); }
         else {
           const sel = el("select", { className: "grow", onchange: () => { L.sel = Number(sel.value); render(); } });
           L.tracks.forEach((t, i) => sel.append(el("option", { value: i, selected: i === L.sel, textContent: A("localSubs", t.name, t.cues.length) })));
           const enc = el("select", { title: A("encT"), onchange: () => { tr.enc = enc.value; reparse(tr); render(); } });
           ["auto", ...Subs.ENCODINGS].forEach((e) => enc.append(el("option", { value: e, selected: e === tr.enc, textContent: e === "auto" ? `${A("encT")}: auto (${tr.used})` : e })));
-          box.append(el("div", { className: "row" }, sel), el("div", { className: "row" }, enc));
+          box.append(el("div", { className: "row" }, sel));
+          if (tr && tr.buf) box.append(el("div", { className: "row" }, enc)); // text encoding only matters for files, not embedded tracks
         }
         box.append(el("button", { textContent: "📂 " + A("subsAdd"), onclick: () => $("#lfile").click() }));
         root.append(box);
