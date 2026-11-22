@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "YT Rounds",
+  "version": "0.2.0",
+  "description": "Split YouTube videos into blocks and run listening-practice rounds with preset speeds. / YouTube動画をブロックに分け、速度を設定したラウンドで聞き込み練習。",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
