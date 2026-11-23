@@ -402,7 +402,9 @@
   // While a loop is running, the first press only stops it and plays on from the end of the clip,
   // so the next press can mark the start of the next sentence (not a spot inside the looped one).
   function releaseLoop() {
-    if (!(S.active && S.round === 3 && S.markStart == null)) return false;
+    // Only a real clip loop is released. In round 3 without clips the "segment" is the whole block, and
+    // jumping to its end would throw you out of the block.
+    if (!(S.active && S.round === 3 && S.markStart == null && (S.clips[S.cur] || []).length)) return false;
     const seg = segment();
     S.active = false; applyView();
     if (seg) { S.lock = Date.now() + 600; seekTo(seg.e); playV(); }
