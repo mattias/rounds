@@ -5,7 +5,10 @@
   const RATIOS = [1, 25 / 23.976, 23.976 / 25, 24 / 23.976, 23.976 / 24, 30 / 29.97, 29.97 / 30, 25 / 24, 24 / 25];
 
   function applySync(base, sync) {
-    const o = (sync && sync.offset) || 0, k = (sync && sync.scale) || 1;
+    // values may come from an imported backup: only accept sane numbers
+    let o = Number(sync && sync.offset), k = Number(sync && sync.scale);
+    if (!isFinite(o)) o = 0;
+    if (!isFinite(k) || k < 0.5 || k > 2) k = 1;
     if (!o && k === 1) return base;
     return base.map((c) => ({ s: c.s * k + o, e: c.e * k + o, text: c.text }));
   }
@@ -16,16 +19,15 @@
     if (cues.length < 5 || ref.length < 5) return null;
     const BIN = 0.25;
     let best = null;
+    const refS = ref.map((r) => r.s).sort((a, b) => a - b); // sorted, so each cue only looks at the starts near it
+    const lowerBound = (v) => { let lo = 0, hi = refS.length; while (lo < hi) { const m = (lo + hi) >> 1; if (refS[m] < v) lo = m + 1; else hi = m; } return lo; };
     for (const k of RATIOS) {
-      const hist = new Map(), diffs = [];
-      for (const c of cues) {
+      const hist = new Map();
+      for (const c of cues) { // pass 1: a histogram of start-time differences (no big arrays)
         const x = c.s * k;
-        for (const r of ref) {
-          const d = r.s - x;
-          if (d < -maxShift || d > maxShift) continue;
-          const b = Math.round(d / BIN);
+        for (let j = lowerBound(x - maxShift); j < refS.length && refS[j] <= x + maxShift; j++) {
+          const b = Math.round((refS[j] - x) / BIN);
           hist.set(b, (hist.get(b) || 0) + 1);
-          diffs.push(d);
         }
       }
       let bb = null, bc = 0;
@@ -34,7 +36,12 @@
         if (s > bc) { bc = s; bb = b; }
       }
       if (bb == null) continue;
-      const near = diffs.filter((d) => Math.abs(d - bb * BIN) <= 0.5).sort((a, b) => a - b);
+      const near = []; // pass 2: only the differences close to the best bin, for an exact median
+      for (const c of cues) {
+        const x = c.s * k, centre = x + bb * BIN;
+        for (let j = lowerBound(centre - 0.5); j < refS.length && refS[j] <= centre + 0.5; j++) near.push(refS[j] - x);
+      }
+      near.sort((a, b) => a - b);
       const offset = near.length ? near[near.length >> 1] : bb * BIN;
       const score = Math.min(1, bc / Math.min(cues.length, ref.length));
       const adj = k === 1 ? score : score * 0.9; // prefer "no drift" unless drift clearly fits better

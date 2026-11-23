@@ -290,7 +290,7 @@
   function start(i, round) {
     if (!video() || !S.blocks[i]) return;
     if (round) S.round = round;
-    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.editClip = null; S.active = true; S.msg = null;
+    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.editClip = null; S.confirmDel = null; S.markStart = null; S.active = true; S.msg = null;
     seekPlay();
     setCC(ROUND_CC[S.round]);
     render();
@@ -325,9 +325,14 @@
     return wrap;
   }
   function deleteClip(i) {
+    const list = S.clips[S.cur] || [];
     if (S.active && S.round === 3 && S.clip === i) { pauseV(); S.active = false; applyView(); }
-    (S.clips[S.cur] || []).splice(i, 1);
-    S.clip = 0; S.editClip = null; S.confirmDel = null;
+    list.splice(i, 1);
+    // The clip that is selected (or looping) must stay the same one when an earlier clip disappears.
+    if (S.clip > i) S.clip--;
+    else if (S.clip === i) S.clip = 0;
+    if (S.clip >= list.length) S.clip = Math.max(0, list.length - 1);
+    S.editClip = null; S.confirmDel = null;
     saveVid();
     render();
   }
@@ -352,6 +357,7 @@
     const v = video(), seg = segment();
     if (!v || !seg) return;
     S.lock = Date.now() + 600; // Netflix seeks asynchronously: ignore the old position meanwhile
+    S.seekWait = Date.now() + 4000; // ...and until the position has really moved back, a late seek must not count as "end reached"
     seekTo(seg.s);
     v.playbackRate = rateFor();
     playV();
@@ -359,7 +365,7 @@
   }
   function halt() {
     pauseV();
-    S.active = false;
+    S.active = false; S.msg = null;
     applyView();
     render();
   }
@@ -387,15 +393,44 @@
     const bar = $(".yr-blk.yr-on .yr-prog");
     if (bar) bar.style.width = Math.min(100, Math.max(0, ((v.currentTime - seg.s) / (seg.e - seg.s)) * 100)) + "%";
     if (Date.now() < S.lock) return;
-    if (!v.paused && v.currentTime >= seg.e - 0.05) onEnd();
+    if (S.seekWait) { // the seek back to the start may be slow: wait until we really are back before looking for the end again
+      if (v.currentTime >= seg.e - 0.2 && Date.now() < S.seekWait) return;
+      S.seekWait = 0;
+    }
+    // A block whose end is unknown (chapter without end) or beyond the video ends with the video.
+    const endAt = Math.min(seg.e, v.duration > 0 ? v.duration - 0.1 : Infinity) - 0.05;
+    if ((!v.paused || v.ended) && v.currentTime >= endAt) onEnd();
   }, 80);
 
   // ---------- Clips ----------
   const blockAt = (t) => S.blocks.findIndex((b) => t >= b.s && t < b.e);
   function addClip(s, e) {
-    (S.clips[S.cur] ||= []).push({ s, e });
-    S.clips[S.cur].sort((a, b) => a.s - b.s); // keep the clips in video order
+    const list = (S.clips[S.cur] ||= []);
+    const keep = list[S.clip]; // the selected / looping clip stays the same one after the sort
+    list.push({ s, e });
+    list.sort((a, b) => a.s - b.s); // keep the clips in video order
+    if (keep) S.clip = list.indexOf(keep);
+    S.editClip = null; S.confirmDel = null;
     saveVid();
+  }
+  // Clips are stored per block number, but each clip has its own absolute time: put every clip into the block
+  // it lies in (the nearest one if none does), so editing the block list never moves clips to the wrong block.
+  function remapClips(blocks, clips) {
+    if (!blocks.length) return clips;
+    const out = {};
+    for (const list of Object.values(clips || {})) {
+      if (!Array.isArray(list)) continue;
+      for (const c of list) {
+        let j = blocks.findIndex((b) => c.s >= b.s - 0.5 && c.s < b.e);
+        if (j < 0) {
+          let best = Infinity;
+          blocks.forEach((b, i) => { const d = Math.min(Math.abs(c.s - b.s), Math.abs(c.s - b.e)); if (d < best) { best = d; j = i; } });
+        }
+        (out[j] ||= []).push(c);
+      }
+    }
+    for (const l of Object.values(out)) l.sort((a, b) => a.s - b.s);
+    return out;
   }
   // Marking stops the loop, so the video plays on and you can reach the end of the sentence (and the next sentences).
   // No block needs to be picked first: the block is found from where you are.
@@ -414,7 +449,7 @@
   }
   function markClip() {
     const v = video();
-    if (!v) return;
+    if (!v || !isFinite(v.currentTime)) return;
     if (releaseLoop()) return;
     if (S.cur < 0) {
       const i = blockAt(v.currentTime);
@@ -436,7 +471,7 @@
   function clipLine() {
     const v = video(), tr = curTrack();
     if (!v) return;
-    if (!tr) { S.msg = T("needSubs"); return render(); }
+    if (!tr || !tr.cues.length) { S.msg = T("needSubs"); return render(); }
     if (releaseLoop()) return;
     if (S.cur < 0) {
       const i = blockAt(v.currentTime);
@@ -446,7 +481,7 @@
     const t = v.currentTime;
     let c = tr.cues.find((x) => t >= x.s && t < x.e);
     if (!c) c = tr.cues.reduce((a, x) => (Math.abs(x.s - t) < Math.abs(a.s - t) ? x : a), tr.cues[0]);
-    const s = Math.max(0, c.s - 0.15), e = c.e + 0.15;
+    const s = Math.max(0, c.s - 0.15), e = Math.max(c.e + 0.15, s + 0.5); // never shorter than half a second
     const list = (S.clips[S.cur] ||= []);
     if (!list.some((x) => Math.abs(x.s - s) < 0.3 && Math.abs(x.e - e) < 0.3)) addClip(s, e);
     S.active = false; applyView();
@@ -728,7 +763,8 @@ ${p.tail}`,
     if (rec) {
       const v = rec.newValue || {};
       if (typeof v.text === "string" && v.text !== S.text) {
-        S.text = v.text; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false;
+        S.text = v.text; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false; S.editClip = null; S.confirmDel = null;
+        S.clips = remapClips(S.blocks, S.clips); saveVid(); // the block list changed (in the popup): clips follow their time
       }
       if (!!v.on !== S.on) { S.on = !!v.on; mount(); } else render();
     }
@@ -742,15 +778,21 @@ ${p.tail}`,
     }
     if (id === S.vid) return;
     S.vid = id; S.cur = -1; S.active = false; S.markStart = null; S.msg = null; S.tracks = new Map(); S.trackSel = null;
-    applyCfg(await store.get("cfg"));
+    // Another navigation may start while we wait for storage: every await is followed by a check that this
+    // call still belongs to the current video, and only then is anything written into the state.
+    const cfg = await store.get("cfg");
+    if (id !== S.vid) return;
+    applyCfg(cfg);
     // YouTube records used the key "vid:<id>" in 0.2.x; keep reading them.
     const saved = (await store.get(SITE + ":" + id)) || (SITE === "youtube" ? await store.get("vid:" + id) : null);
+    if (id !== S.vid) return;
     S.on = !!saved?.on;
     S.text = saved?.text ?? "";
     S.clips = saved?.clips ?? {};
     if (S.on) for (let i = 0; i < 50 && !(video()?.duration > 0); i++) await new Promise((r) => setTimeout(r, 200));
     if (id !== S.vid) return;
     S.blocks = parseBlocks(S.text);
+    S.clips = remapClips(S.blocks, S.clips);
     mount();
     if (SITE === "netflix") pageCmd("replay");
   }

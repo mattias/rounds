@@ -209,27 +209,66 @@
       if (d.app !== "rounds" || typeof d.videos !== "object") throw new Error("bad");
       const existing = await chrome.storage.local.get(null);
       const patch = {};
+      // Nothing from the file is trusted: ids, shapes and numbers are checked, and a record that lacks a part
+      // (for example only {"text": ...}) keeps what is already stored for that part instead of erasing it.
+      const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+      const safeKey = (k) => k !== "__proto__" && k !== "constructor" && k !== "prototype";
+      const idOk = (site, id) => (site === "youtube" ? /^[\w-]{11}$/.test(id) : site === "netflix" ? /^\d{1,12}$/.test(id) : typeof id === "string" && id.length > 0 && id.length < 300);
+      const num = (x) => typeof x === "number" && isFinite(x);
+      const cleanClips = (c) => {
+        const out = {};
+        if (!isObj(c)) return out;
+        for (const [bi, list] of Object.entries(c)) {
+          if (!safeKey(bi) || !Array.isArray(list)) continue;
+          const l = list.filter((x) => x && num(x.s) && num(x.e) && x.e > x.s && x.s >= 0).map((x) => ({ s: x.s, e: x.e }));
+          if (l.length) out[bi] = l;
+        }
+        return out;
+      };
+      const cleanSync = (s) => {
+        const out = {};
+        if (!isObj(s)) return out;
+        for (const [name, v] of Object.entries(s)) if (safeKey(name) && isObj(v) && num(v.offset) && num(v.scale) && v.scale > 0.5 && v.scale < 2) out[name] = { offset: v.offset, scale: v.scale };
+        return out;
+      };
+      let count = 0;
       for (const [k, rec] of Object.entries(d.videos)) {
-        if (k.startsWith("local:")) { patch[k] = { text: rec.text || "", clips: rec.clips || {}, ...(rec.sync ? { sync: rec.sync } : {}) }; continue; } // own files
-        const key = /^(youtube|netflix):/.test(k) ? k : "youtube:" + k;
-        const old = existing[key] || {};
-        patch[key] = { on: old.on ?? !!rec.text, text: rec.text || "", clips: rec.clips || {} };
+        if (!safeKey(k) || !isObj(rec)) continue;
+        const m = k.match(/^(youtube|netflix|local):(.*)$/s);
+        const site = m ? m[1] : "youtube", id = m ? m[2] : k;
+        if (!idOk(site, id)) continue;
+        const key = site + ":" + id, old = existing[key] || {};
+        const next = {
+          text: typeof rec.text === "string" ? rec.text : old.text || "",
+          clips: isObj(rec.clips) ? cleanClips(rec.clips) : old.clips || {},
+        };
+        if (isObj(rec.sync)) next.sync = cleanSync(rec.sync); else if (old.sync) next.sync = old.sync;
+        if (site !== "local") next.on = old.on ?? !!next.text; // streaming videos: show the panel when blocks exist
+        patch[key] = next;
+        count++;
       }
+      let newRecent = recent, newLocal = localRecent;
       if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10; entries without "site" came from the mobile app (YouTube)
         const merge = (list, keyOf) => {
           const seen = new Set();
           return list.sort((a, b) => (b.ts || 0) - (a.ts || 0)).filter((e) => { const k = keyOf(e); return !seen.has(k) && seen.add(k); }).slice(0, 10);
         };
-        const valid = d.history.filter((e) => e && e.id);
-        const stream = valid.filter((e) => e.kind !== "local").map((e) => ({ ...e, site: e.site === "netflix" ? "netflix" : "youtube" }));
-        const own = valid.filter((e) => e.kind === "local").map(({ id, title, ts }) => ({ id, title, ts, kind: "local" }));
+        const valid = d.history.filter((e) => isObj(e) && typeof e.id === "string");
+        const title = (e) => (typeof e.title === "string" ? e.title.slice(0, 200) : "");
+        const ts = (e) => (num(e.ts) ? e.ts : 0);
+        const stream = valid.filter((e) => e.kind !== "local").map((e) => ({ site: e.site === "netflix" ? "netflix" : "youtube", id: e.id, title: title(e), ts: ts(e) }))
+          .filter((e) => idOk(e.site, e.id));
+        const own = valid.filter((e) => e.kind === "local" && idOk("local", e.id)).map((e) => ({ id: e.id, title: title(e), ts: ts(e), kind: "local" }));
         patch.history = merge([...stream, ...(Array.isArray(existing.history) ? existing.history : [])], (e) => e.site + ":" + e.id);
         patch.localHistory = merge([...own, ...(Array.isArray(existing.localHistory) ? existing.localHistory : [])], (e) => e.id);
-        recent = patch.history; localRecent = patch.localHistory;
+        newRecent = patch.history; newLocal = patch.localHistory;
       }
-      if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); patch.cfg = cfg; T = makeT(cfg.uiLang); }
-      await chrome.storage.local.set(patch);
-      return T("imported", Object.keys(d.videos).length);
+      let newCfg = null;
+      if (isObj(d.cfg)) { newCfg = mergeCfg({ ...d.cfg, onboarded: true }); patch.cfg = newCfg; }
+      await chrome.storage.local.set(patch); // only after it succeeded do we update what the popup shows
+      recent = newRecent; localRecent = newLocal;
+      if (newCfg) { cfg = newCfg; T = makeT(cfg.uiLang); }
+      return T("imported", count);
     } catch { return T("importBad"); }
   }
 

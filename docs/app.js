@@ -15,6 +15,7 @@
       exportB: "Export", importB: "Import", exportHint: "Save your blocks, clips and settings as a file, or load a file from another device.",
       imported: "Imported {0} video(s).", importBad: "Not a Rounds backup file.", exported: "Backup saved.",
       noEmbed: "This video cannot be played here (embedding is disabled).", rate: "Playing at {0}x on this device.",
+      speedsT: "Speeds",
       syncT: "Subtitle timing",
       syncHint: "Subtitles too early or too late? Fix it here. It is saved for this file.",
       syncOffset: "Shift (s)",
@@ -61,6 +62,7 @@
       exportB: "エクスポート", importB: "インポート", exportHint: "ブロック・クリップ・設定をファイルに保存、または別の端末のファイルを読み込みます。",
       imported: "{0}件の動画を読み込みました。", importBad: "Roundsのバックアップファイルではありません。", exported: "バックアップを保存しました。",
       noEmbed: "この動画はここでは再生できません（埋め込みが無効）。", rate: "この端末では{0}倍速で再生されています。",
+      speedsT: "速度",
       syncT: "字幕のタイミング",
       syncHint: "字幕が早い・遅い場合はここで直します。このファイルに保存されます。",
       syncOffset: "ずらし（秒）",
@@ -107,6 +109,7 @@
       exportB: "Exportera", importB: "Importera", exportHint: "Spara dina block, klipp och inställningar som en fil, eller läs in en fil från en annan enhet.",
       imported: "Importerade {0} video(r).", importBad: "Inte en Rounds-säkerhetskopia.", exported: "Säkerhetskopian sparad.",
       noEmbed: "Videon kan inte spelas här (inbäddning är avstängd).", rate: "Spelas i {0}x på den här enheten.",
+      speedsT: "Hastigheter",
       syncT: "Undertextens timing",
       syncHint: "Undertexten för tidig eller för sen? Fixa det här. Det sparas för den här filen.",
       syncOffset: "Förskjutning (s)",
@@ -200,6 +203,7 @@
     rate: () => (S.mode === "local" ? lv().playbackRate : yt.getPlaybackRate()),
     time: () => (S.mode === "local" ? lv().currentTime : yt.getCurrentTime()),
     playing: () => (S.mode === "local" ? !lv().paused && !lv().ended : !!yt && yt.getPlayerState && yt.getPlayerState() === 1),
+    ended: () => (S.mode === "local" ? lv().ended : !!yt && !!yt.getPlayerState && yt.getPlayerState() === 0),
     ok: () => S.ready && (S.mode === "local" || !!yt),
   };
   const open = new Set(JSON.parse(LS.getItem("rounds:open") || "[]"));
@@ -251,7 +255,7 @@
   // Tabs: "player" (YouTube), "local" (own files), "history". Leaving a tab pauses what was playing.
   function setView(v) {
     if (v === view) return;
-    if (E.ok() && E.playing()) { E.pause(); S.active = false; }
+    if (E.ok()) { if (E.playing()) E.pause(); S.active = false; S.markStart = null; } // also when it was paused by hand
     view = v;
     if (v === "player") S = states.youtube;
     if (v === "local") S = states.local;
@@ -266,7 +270,7 @@
       wrap.append(el("div", { className: "hist" },
         el("button", { className: "histbtn", onclick: () => (e.kind === "local" ? reopenLocal(e) : loadVideo(e.id)) },
           e.kind === "local" ? el("span", { className: "thumb-local", textContent: "🎞" })
-            : el("img", { src: `https://i.ytimg.com/vi/${e.id}/mqdefault.jpg`, alt: "", loading: "lazy" }),
+            : el("img", { src: `https://i.ytimg.com/vi/${encodeURIComponent(e.id)}/mqdefault.jpg`, alt: "", loading: "lazy" }),
           el("span", { className: "histtxt" }, el("b", { textContent: e.title || e.id }),
             el("small", { textContent: `${new Date(e.ts).toLocaleDateString(cfg.uiLang)} · ${A("histBlocks", n)}` }))),
         el("button", { textContent: "✕", title: A("histRemove"), onclick: () => { setJ(HIST_KEY, getHist().filter((x) => x.id !== e.id)); render(); } })));
@@ -276,16 +280,18 @@
   }
 
   function loadVideo(id) {
+    if (!/^[\w-]{11}$/.test(String(id))) return; // ids come from links, history and imported files: only real YouTube ids
     touchHist(id);
     S = states.youtube;
     if (id === S.vid && yt && S.ready) { view = "player"; render(); return; }
     if (lv() && !lv().paused) lv().pause();
     view = "player";
     S.vid = id; S.cur = -1; S.active = false; S.msg = null; S.noEmbed = false; S.ready = false; S.dur = 0; self.__dur = 0;
+    S.clip = 0; S.pass = 0; S.solo = false; S.markStart = null; S.editClip = null; S.confirmDel = null;
     const rec = getJ(VID_PREFIX + id);
     S.text = rec?.text || ""; S.clips = rec?.clips || {};
     S.blocks = parseBlocks(S.text);
-    history.replaceState(null, "", location.pathname + "?v=" + id);
+    history.replaceState(null, "", location.pathname + "?v=" + encodeURIComponent(id));
     if (yt && yt.loadVideoById && S.ready !== undefined && yt.cueVideoById) { try { yt.cueVideoById(id); S.ready = true; } catch { /* rebuilt below */ } }
     if (!yt || !yt.cueVideoById) {
       if (apiReady) makePlayer(id); else { pendingId = id; loadApi(); }
@@ -327,6 +333,7 @@
     if (!lv().paused) lv().pause();
     const key = `local:${file.name}|${file.size}`;
     S.vid = key; S.cur = -1; S.active = false; S.msg = null; S.ready = false; S.dur = 0; self.__dur = 0;
+    S.clip = 0; S.pass = 0; S.solo = false; S.markStart = null; S.editClip = null; S.confirmDel = null; S.anchor1 = null; S.anchorIdx = null; S.listen = null; S.scan = null;
     S.local = { name: file.name, url: URL.createObjectURL(file), tracks: [], sel: -1, err: false };
     const rec = getJ(VID_PREFIX + key);
     S.text = rec?.text || ""; S.clips = rec?.clips || {}; S.blocks = []; S.sync = rec?.sync || {};
@@ -422,8 +429,13 @@
     const hp = actx.createBiquadFilter(), lp = actx.createBiquadFilter(), proc = actx.createScriptProcessor(1024, 1, 1);
     hp.type = "highpass"; hp.frequency.value = 300; lp.type = "lowpass"; lp.frequency.value = 3400; // roughly the speech band
     src.connect(gain); gain.connect(actx.destination); // normal playback goes through here from now on
-    src.connect(hp); hp.connect(lp); lp.connect(proc); proc.connect(actx.destination);
-    tap = { gain, on: false, vals: [], t0: 0 };
+    src.connect(hp); hp.connect(lp);
+    // the measuring node only runs while we are measuring (a ScriptProcessor costs CPU for as long as it is connected)
+    tap = {
+      gain, on: false, vals: [], t0: 0,
+      attach() { lp.connect(proc); proc.connect(actx.destination); },
+      detach() { try { lp.disconnect(proc); } catch { /* not connected */ } try { proc.disconnect(); } catch { /* not connected */ } },
+    };
     proc.onaudioprocess = (e) => {
       if (!tap.on) return;
       const d = e.inputBuffer.getChannelData(0);
@@ -438,18 +450,23 @@
     const v = lv(), t = audioTap();
     await actx.resume();
     v.pause(); v.currentTime = w0;
-    if (v.seeking) await new Promise((r) => v.addEventListener("seeked", r, { once: true }));
-    t.vals = []; t.on = true; v.playbackRate = rate;
-    try { await v.play(); } catch { /* blocked: nothing to measure */ }
-    while (!cancelled() && !v.ended && !v.paused && v.currentTime < w1) { onPct((v.currentTime - w0) / (w1 - w0)); await new Promise((r) => setTimeout(r, 200)); }
-    t.on = false; v.pause();
+    if (v.seeking) await Promise.race([new Promise((r) => v.addEventListener("seeked", r, { once: true })), new Promise((r) => setTimeout(r, 5000))]); // never wait for ever
+    t.vals = []; t.on = true; t.attach(); v.playbackRate = rate;
+    try {
+      try { await v.play(); } catch { /* blocked: nothing to measure */ }
+      while (!cancelled() && !v.ended && !v.paused && v.currentTime < w1) { onPct((v.currentTime - w0) / (w1 - w0)); await new Promise((r) => setTimeout(r, 200)); }
+    } finally {
+      t.on = false; t.detach(); v.pause();
+    }
     return { vals: t.vals.slice(), t0: t.t0, bin: (1024 / actx.sampleRate) * rate };
   }
   async function listenSync(tr) {
     const L = states.local, v = lv();
     if (!L.local || !(v.duration > 20)) return;
     const prev = { t: v.currentTime, rate: v.playbackRate, playing: !v.paused };
-    L.listen = { pct: 0, cancel: false }; L.syncMsg = null; render();
+    L.active = false; L.markStart = null; // a running loop would keep seeking and ruin the measurement
+    const job = (L.listen = { pct: 0, cancel: false }), fileNow = L.local; L.syncMsg = null; render();
+    const stale = () => L.listen !== job || L.local !== fileNow; // another file was loaded meanwhile
     const dur = v.duration, span = Math.min(150, dur * 0.4);
     const centers = dur > 900 ? [dur * 0.25, dur * 0.7] : [dur * 0.5], found = [];
     let shown = -1;
@@ -457,19 +474,20 @@
       audioTap().gain.gain.value = 0; // silent while measuring
       for (let i = 0; i < centers.length; i++) {
         const w0 = Math.max(0, centers[i] - span / 2), w1 = Math.min(dur, w0 + span);
-        const cap = await captureWindow(w0, w1, 4, () => L.listen.cancel, (p) => {
-          L.listen.pct = (i + p) / centers.length;
-          const s = Math.floor(L.listen.pct * 20);
-          if (s !== shown) { shown = s; render(); }
+        const cap = await captureWindow(w0, w1, 4, () => job.cancel || stale(), (p) => {
+          job.pct = (i + p) / centers.length;
+          const s = Math.floor(job.pct * 20);
+          if (s !== shown && !stale()) { shown = s; render(); }
         });
-        if (L.listen.cancel) break;
+        if (job.cancel || stale()) break;
         const r = Sync.correlate(cap.vals, cap.bin, cap.t0, tr.cues);
         if (r) found.push({ T: cap.t0 + (cap.vals.length * cap.bin) / 2, d: r.offset, conf: r.confidence });
       }
     } catch { /* reported below as "no reliable match" */ }
     if (tap) tap.gain.gain.value = 1;
+    if (stale()) return; // the video element now belongs to the new file: leave it alone
     v.playbackRate = prev.rate; v.currentTime = prev.t; if (!prev.playing) v.pause();
-    const cancelled = L.listen.cancel;
+    const cancelled = job.cancel;
     L.listen = null;
     const good = found.filter((f) => f.conf >= CONF_MIN);
     if (cancelled) L.syncMsg = null;
@@ -588,7 +606,7 @@
   function start(i, round) {
     if (!E.ok() || !S.blocks[i]) return;
     if (round) S.round = round;
-    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.editClip = null; S.active = true; S.msg = null;
+    S.cur = i; S.pass = 0; S.clip = 0; S.solo = false; S.editClip = null; S.confirmDel = null; S.markStart = null; S.active = true; S.msg = null;
     seekPlay();
     render();
   }
@@ -622,9 +640,14 @@
     return wrap;
   }
   function deleteClip(i) {
+    const list = S.clips[S.cur] || [];
     if (S.active && S.round === 3 && S.clip === i) { E.pause(); S.active = false; }
-    (S.clips[S.cur] || []).splice(i, 1);
-    S.clip = 0; S.editClip = null; S.confirmDel = null;
+    list.splice(i, 1);
+    // The clip that is selected (or looping) must stay the same one when an earlier clip disappears.
+    if (S.clip > i) S.clip--;
+    else if (S.clip === i) S.clip = 0;
+    if (S.clip >= list.length) S.clip = Math.max(0, list.length - 1);
+    S.editClip = null; S.confirmDel = null;
     saveVid();
     render();
   }
@@ -648,6 +671,7 @@
     const seg = segment();
     if (!seg || !E.ok()) return;
     S.lock = Date.now() + 600;
+    S.seekWait = Date.now() + 4000; // until the position has really moved back, a late seek must not count as "end reached"
     E.seek(seg.s);
     E.setRate(rateFor());
     E.play();
@@ -656,7 +680,7 @@
   }
   function halt() {
     E.ok() && E.pause();
-    S.active = false;
+    S.active = false; S.msg = null;
     render();
   }
   function onEnd() {
@@ -682,15 +706,25 @@
     const bar = $(".blk.on .prog");
     if (bar) bar.style.width = Math.min(100, Math.max(0, ((t - seg.s) / (seg.e - seg.s)) * 100)) + "%";
     if (Date.now() < S.lock) return;
-    if (E.playing() && t >= seg.e - 0.05) onEnd();
+    if (S.seekWait) { // the seek back to the start may be slow: wait until we really are back before looking for the end again
+      if (t >= seg.e - 0.2 && Date.now() < S.seekWait) return;
+      S.seekWait = 0;
+    }
+    // A block whose end is unknown (chapter without end) or beyond the file ends with the file.
+    const endAt = Math.min(seg.e, S.dur > 0 ? S.dur - 0.1 : Infinity) - 0.05;
+    if ((E.playing() || E.ended()) && t >= endAt) onEnd();
   }, 80);
 
 
   // ---------- Clips ----------
   const blockAt = (t) => S.blocks.findIndex((b) => t >= b.s && t < b.e);
   function addClip(s, e) {
-    (S.clips[S.cur] ||= []).push({ s, e });
-    S.clips[S.cur].sort((a, b) => a.s - b.s); // keep the clips in video order
+    const list = (S.clips[S.cur] ||= []);
+    const keep = list[S.clip]; // the selected / looping clip stays the same one after the sort
+    list.push({ s, e });
+    list.sort((a, b) => a.s - b.s); // keep the clips in video order
+    if (keep) S.clip = list.indexOf(keep);
+    S.editClip = null; S.confirmDel = null;
     saveVid();
   }
   // Marking stops the loop, so the video plays on and you can reach the end of the sentence (and the next sentences).
@@ -712,6 +746,7 @@
     if (!E.ok()) { S.msg = T("pick"); return render(); }
     if (releaseLoop()) return;
     const t = E.time();
+    if (!isFinite(t)) return;
     if (S.cur < 0) {
       const i = blockAt(t);
       if (i < 0) { S.msg = T("pick"); return render(); }
@@ -738,7 +773,7 @@
     }
     let c = tr.cues.find((x) => t >= x.s && t < x.e);
     if (!c) c = tr.cues.reduce((a, x) => (Math.abs(x.s - t) < Math.abs(a.s - t) ? x : a), tr.cues[0]);
-    const s = Math.max(0, c.s - 0.15), e = c.e + 0.15;
+    const s = Math.max(0, c.s - 0.15), e = Math.max(c.e + 0.15, s + 0.5); // never shorter than half a second
     const list = (S.clips[S.cur] ||= []);
     if (!list.some((x) => Math.abs(x.s - s) < 0.3 && Math.abs(x.e - e) < 0.3)) addClip(s, e);
     S.active = false;
@@ -784,23 +819,53 @@
     try {
       const d = JSON.parse(await file.text());
       if (d.app !== "rounds" || typeof d.videos !== "object") throw new Error("bad");
+      // Nothing from the file is trusted: ids, shapes and numbers are checked, and a record that lacks a part
+      // (for example only {"text": ...}) keeps what is already stored for that part instead of erasing it.
+      const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+      const safeKey = (k) => k !== "__proto__" && k !== "constructor" && k !== "prototype";
+      const fin = (x) => typeof x === "number" && isFinite(x);
+      const idOk = (id) => (String(id).startsWith("local:") ? id.length < 300 : /^[\w-]{11}$/.test(String(id)));
+      const cleanClips = (c) => {
+        const out = {};
+        if (!isObj(c)) return out;
+        for (const [bi, list] of Object.entries(c)) {
+          if (!safeKey(bi) || !Array.isArray(list)) continue;
+          const l = list.filter((x) => x && fin(x.s) && fin(x.e) && x.e > x.s && x.s >= 0).map((x) => ({ s: x.s, e: x.e }));
+          if (l.length) out[bi] = l;
+        }
+        return out;
+      };
+      const cleanSync = (s) => {
+        const out = {};
+        if (!isObj(s)) return out;
+        for (const [name, v] of Object.entries(s)) if (safeKey(name) && isObj(v) && fin(v.offset) && fin(v.scale) && v.scale > 0.5 && v.scale < 2) out[name] = { offset: v.offset, scale: v.scale };
+        return out;
+      };
       let n = 0;
       // Files from the extension use "youtube:ID" / "netflix:ID" keys; Netflix has no place in the mobile app.
-      const imported = {};
+      const imported = Object.create(null);
       for (const [k, rec] of Object.entries(d.videos)) {
-        if (k.startsWith("netflix:")) continue;
+        if (!safeKey(k) || !isObj(rec) || k.startsWith("netflix:")) continue;
         const id = k.replace(/^youtube:/, "");
-        imported[id] = { text: rec.text || "", clips: rec.clips || {}, ...(rec.sync ? { sync: rec.sync } : {}) };
-        setJ(VID_PREFIX + id, imported[id]); n++;
+        if (!idOk(id)) continue;
+        const old = getJ(VID_PREFIX + id) || {};
+        const next = {
+          text: typeof rec.text === "string" ? rec.text : old.text || "",
+          clips: isObj(rec.clips) ? cleanClips(rec.clips) : old.clips || {},
+        };
+        if (isObj(rec.sync)) next.sync = cleanSync(rec.sync); else if (old.sync) next.sync = old.sync;
+        imported[id] = next;
+        setJ(VID_PREFIX + id, next); n++;
       }
       if (Array.isArray(d.history)) { // merge: newest first, no duplicates, at most 10
         const seen = new Set();
-        const merged = [...d.history.filter((e) => e && e.id && e.site !== "netflix"), ...getHist()]
-          .sort((a, b) => (b.ts || 0) - (a.ts || 0)).filter((e) => !seen.has(e.id) && seen.add(e.id));
+        const clean = d.history.filter((e) => isObj(e) && typeof e.id === "string" && e.site !== "netflix" && idOk(e.id))
+          .map((e) => ({ id: e.id, title: typeof e.title === "string" ? e.title.slice(0, 200) : "", ts: fin(e.ts) ? e.ts : 0, ...(e.kind === "local" ? { kind: "local" } : {}) }));
+        const merged = [...clean, ...getHist()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).filter((e) => !seen.has(e.id) && seen.add(e.id));
         setJ(HIST_KEY, merged.slice(0, HIST_MAX));
       }
-      if (d.cfg) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); T = makeT(cfg.uiLang); saveCfg(); }
-      if (S.vid && imported[S.vid]) { S.text = imported[S.vid].text; S.clips = imported[S.vid].clips; S.blocks = parseBlocks(S.text); }
+      if (isObj(d.cfg)) { cfg = mergeCfg({ ...d.cfg, onboarded: true }); T = makeT(cfg.uiLang); saveCfg(); }
+      if (S.vid && imported[S.vid]) { S.text = imported[S.vid].text; S.clips = imported[S.vid].clips; S.blocks = parseBlocks(S.text); S.clips = remapClips(S.blocks, S.clips); if (S.mode === "local") S.sync = imported[S.vid].sync || {}; }
       S.msg = A("imported", n);
     } catch { S.msg = A("importBad"); }
     render();
@@ -841,9 +906,33 @@
     return d;
   }
 
+  // Clips are stored per block number, but each clip has its own absolute time: put every clip into the block
+  // it lies in (the nearest one if none does), so adding/removing/reordering blocks never moves clips to the wrong block.
+  function remapClips(blocks, clips) {
+    if (!blocks.length) return clips;
+    const out = {};
+    for (const list of Object.values(clips || {})) {
+      if (!Array.isArray(list)) continue;
+      for (const c of list) {
+        let j = blocks.findIndex((b) => c.s >= b.s - 0.5 && c.s < b.e);
+        if (j < 0) { // outside every block: the block whose start is closest
+          let best = Infinity;
+          blocks.forEach((b, i) => { const d = Math.min(Math.abs(c.s - b.s), Math.abs(c.s - b.e)); if (d < best) { best = d; j = i; } });
+        }
+        (out[j] ||= []).push(c);
+      }
+    }
+    for (const l of Object.values(out)) l.sort((a, b) => a.s - b.s);
+    return out;
+  }
+
   function render() {
     const root = ui();
     const keepScroll = window.scrollY;
+    const prevTa = $("#blk-ta");
+    // only text that was really typed (differs from what the box was filled with) is carried over
+    const keepEdit = prevTa && prevTa.dataset.vid === S.vid && prevTa.value !== prevTa.dataset.base
+      ? { value: prevTa.value, focused: document.activeElement === prevTa, a: prevTa.selectionStart, b: prevTa.selectionEnd } : null;
     root.replaceChildren();
     document.title = "Rounds";
     $("#tagline").textContent = A(EXT ? "taglineLocal" : "tagline");
@@ -968,12 +1057,16 @@
       }
 
       // Block editor
-      const ta = el("textarea", { value: S.text, spellcheck: false });
+      // What you are typing survives a redraw (a loop pass redraws the panel); it is only replaced by Save.
+      const ta = el("textarea", { id: "blk-ta", value: keepEdit != null ? keepEdit.value : S.text, spellcheck: false });
+      ta.dataset.vid = S.vid; ta.dataset.base = S.text;
+      queueMicrotask(() => { if (keepEdit && keepEdit.focused && ta.isConnected && ta.offsetParent) { ta.focus(); ta.setSelectionRange(keepEdit.a, keepEdit.b); } });
       const saved = el("span", { className: "ok" });
       root.append(section("blocks", A("blocksT"),
         el("p", { className: "hint", textContent: T("blocksFormat") }), ta,
         el("div", { className: "transport" }, el("button", { className: "primary", textContent: T("save"), onclick: () => {
-          S.text = ta.value; S.blocks = parseBlocks(S.text); S.cur = -1; S.active = false; saveVid(); S.msg = T("saved"); render(); } }), saved)));
+          S.text = ta.value; S.blocks = parseBlocks(S.text); S.clips = remapClips(S.blocks, S.clips); // clips follow their time, not the old block number
+          S.cur = -1; S.active = false; S.editClip = null; S.confirmDel = null; saveVid(); S.msg = T("saved"); render(); } }), saved)));
     }
 
     // How the rounds work (full texts in English, 日本語, Svenska; other languages show English)

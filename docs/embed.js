@@ -29,7 +29,12 @@
   // Turns [{t, dur, text}] into final cues through the shared subtitle parsers.
   function fillDurations(list) {
     list.sort((a, b) => a.t - b.t);
-    list.forEach((c, i) => { if (!(c.dur > 0)) c.dur = Math.min(i + 1 < list.length ? list[i + 1].t - c.t : 5, 5); });
+    list.forEach((c, i) => {
+      if (c.dur > 0) return;
+      let j = i + 1; // the next cue that starts later (two lines shown at once start together)
+      while (j < list.length && list[j].t - c.t <= 1e-6) j++;
+      c.dur = Math.min(j < list.length ? list[j].t - c.t : 5, 5);
+    });
     return list;
   }
   function toCues(list, codec) {
@@ -76,8 +81,9 @@
     const tracks = [];
     let pos = 0, tsScale = 1000000, cluster = 0, cur = null, last = null, n = 0;
     const subs = new Map(); // track number -> { track, list }
-    const uint = async (p, len) => { const b = await R.bytes(p, len); let v = 0; for (let i = 0; i < len; i++) v = v * 256 + b[i]; return v; };
-    const str = async (p, len) => dec.decode(await R.bytes(p, len)).replace(/\0+$/, "");
+    // Sizes come from the file, so a damaged file must not be able to ask for absurd reads.
+    const uint = async (p, len) => { len = Math.min(len, 8); const b = await R.bytes(p, len); let v = 0; for (let i = 0; i < len; i++) v = v * 256 + b[i]; return v; };
+    const str = async (p, len) => dec.decode(await R.bytes(p, Math.min(len, 4096))).replace(/\0+$/, "");
     const prepare = () => {
       for (const t of tracks) if (t.type === 17 && TEXT_CODECS.has(t.codec)) subs.set(t.num, { track: t, list: [] });
     };
@@ -105,7 +111,7 @@
       else if (cur && id === 0x536e) cur.name = await str(body, size);
       else if (cur && id === 0x22b59c) cur.lang = await str(body, size);
       else if (cur && id === 0x22b59d) cur.ietf = await str(body, size);
-      else if ((id === 0xa3 || id === 0xa1) && prepared && size > 4) {
+      else if ((id === 0xa3 || id === 0xa1) && prepared && size > 4 && size < 4000000) { // a subtitle block is tiny
         const hd = await R.bytes(body, 12);
         const tn = readSize(hd, 0); // the track number is a vint
         if (tn) {
@@ -170,15 +176,18 @@
     const stts = find(b, stbl, "stts"), stsz = find(b, stbl, "stsz"), stsc = find(b, stbl, "stsc");
     const co = find(b, stbl, "stco") || find(b, stbl, "co64");
     if (!stts || !stsz || !stsc || !co) return null;
+    // Every count below comes from the file: never trust it further than the box it sits in (and a sane maximum).
+    const MAX = 2000000, room = (box, head, each) => Math.max(0, Math.floor((box.end - box.body - head) / each));
     // sample sizes
-    const fixed = u32(b, stsz.body + 4), count = u32(b, stsz.body + 8);
+    const fixed = u32(b, stsz.body + 4);
+    const count = Math.min(u32(b, stsz.body + 8), MAX, fixed ? MAX : room(stsz, 12, 4));
     const sizes = new Array(count);
     for (let i = 0; i < count; i++) sizes[i] = fixed || u32(b, stsz.body + 12 + i * 4);
     // chunk offsets
-    const big = co.type === "co64", nChunks = u32(b, co.body + 4), chunk = [];
+    const big = co.type === "co64", nChunks = Math.min(u32(b, co.body + 4), room(co, 8, big ? 8 : 4)), chunk = [];
     for (let i = 0; i < nChunks; i++) chunk.push(big ? u32(b, co.body + 8 + i * 8) * 4294967296 + u32(b, co.body + 12 + i * 8) : u32(b, co.body + 8 + i * 4));
     // samples per chunk -> offsets
-    const nsc = u32(b, stsc.body + 4), runs = [];
+    const nsc = Math.min(u32(b, stsc.body + 4), room(stsc, 8, 12)), runs = [];
     for (let i = 0; i < nsc; i++) runs.push({ first: u32(b, stsc.body + 8 + i * 12), per: u32(b, stsc.body + 12 + i * 12) });
     const offsets = [];
     for (let c = 0; c < nChunks; c++) {
@@ -188,11 +197,11 @@
       for (let k = 0; k < per && offsets.length < count; k++) { offsets.push(off); off += sizes[offsets.length - 1]; }
     }
     // times
-    const nts = u32(b, stts.body + 4), times = [];
+    const nts = Math.min(u32(b, stts.body + 4), room(stts, 8, 8)), times = [];
     let t = 0;
-    for (let i = 0; i < nts; i++) {
+    for (let i = 0; i < nts && times.length < count; i++) {
       const cnt = u32(b, stts.body + 8 + i * 8), delta = u32(b, stts.body + 12 + i * 8);
-      for (let k = 0; k < cnt; k++) { times.push([t / timescale, delta / timescale]); t += delta; }
+      for (let k = 0; k < cnt && times.length < count; k++) { times.push([t / (timescale || 1), delta / (timescale || 1)]); t += delta; }
     }
     return { codec, lang, offsets, sizes, times };
   }
@@ -221,14 +230,15 @@
       for (let i = 0; i < tr.offsets.length; i++) {
         if (opts.cancelled && opts.cancelled()) return null;
         if ((i & 255) === 0) { if (opts.onProgress) opts.onProgress(i / tr.offsets.length); await new Promise((r) => setTimeout(r)); }
-        const sz = tr.sizes[i];
-        if (sz < 3) continue;
+        const sz = tr.sizes[i], tm = tr.times[i];
+        if (!tm || !(sz >= 3) || sz > 1000000) continue; // no time (truncated table) or not a subtitle sample
         const s = await R.bytes(tr.offsets[i], sz);
+        if (s.length < sz) continue;
         let text = "";
         if (tr.codec === "tx3g") text = dec.decode(s.subarray(2, 2 + Math.min(u16(s, 0), sz - 2)));
         else for (const bx of boxes(s, 0, s.length)) if (bx.type === "vttc") for (const c of boxes(s, bx.body, bx.end)) if (c.type === "payl") text = dec.decode(s.subarray(c.body, c.end));
         text = text.replace(/\r/g, "").trim();
-        if (text) list.push({ t: tr.times[i][0], dur: tr.times[i][1], text });
+        if (text) list.push({ t: tm[0], dur: tm[1], text });
       }
       const cues = toCues(list, "S_TEXT/UTF8");
       if (cues.length) out.push({ name: "", lang: tr.lang === "und" ? "" : tr.lang, codec: tr.codec, cues });
